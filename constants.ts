@@ -112,6 +112,7 @@ const getRegion = (neighborhood: string): string => {
 
 const RAW_EVENTS_DATA = [
   // --- NOVAS INCLUSÕES ---
+  { name: "The Lumineers", venue: "Vivo Rio", type: "Show & Festival", start: "22/04/2026", end: "22/04/2026", neighborhood: "Centro", point: "POINT (-43.1725 -22.9142)", year: "2026", addedAt: "04/03/2026" },
   { name: "Open Air Brasil", venue: "Jockey Club Brasileiro", type: "Show & Festival", start: "25/03/2026", end: "11/04/2026", neighborhood: "Jardim Botânico", point: "POINT (-43.2225 -22.9776)", year: "2026", addedAt: "02/03/2026" },
   { name: "Jorge Vercillo", venue: "Vivo Rio", type: "Show", start: "08/05/2026", end: "08/05/2026", neighborhood: "Centro", point: "POINT (-43.1725 -22.9142)", year: "2026", addedAt: "02/03/2026" },
 
