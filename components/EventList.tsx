@@ -80,7 +80,7 @@ const EventList: React.FC<EventListProps> = ({ events }) => {
   }, [events, filters, sortConfig]);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
