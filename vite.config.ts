@@ -13,7 +13,7 @@ export default defineConfig({
   },
   // 'base: "./"' garante que o HTML procure os JS/CSS na mesma pasta,
   // essencial para hospedagens compartilhadas ou subdiretórios.
-  base: './',
+  base: '/',
   build: {
     outDir: 'dist',
     emptyOutDir: true,
