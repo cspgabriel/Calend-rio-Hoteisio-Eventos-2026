@@ -77,13 +77,33 @@ export default function App() {
   const loadEvents = async () => {
     try {
       const querySnapshot = await getDocs(collection(db, 'eventos'));
-      const eventsData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        startDate: doc.data().start,
-        endDate: doc.data().end,
-        inclusionDate: doc.data().addedAt
-      } as EventData));
+      const eventsData = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        const startDate = data.start; // Assume YYYY-MM-DD
+        const endDate = data.end;
+        const parsedStart = new Date(startDate);
+        const parsedEnd = new Date(endDate);
+        return {
+          id: doc.id,
+          name: data.name,
+          venue: data.venue,
+          type: data.type,
+          startDate: startDate.split('-').reverse().join('/'), // Convert to DD/MM/YYYY
+          endDate: endDate.split('-').reverse().join('/'),
+          month: parsedStart.toLocaleDateString('pt-BR', { month: 'long' }),
+          neighborhood: data.neighborhood,
+          region: data.region,
+          year: data.year,
+          lat: 0, // Placeholder
+          lng: 0, // Placeholder
+          parsedStartDate: parsedStart,
+          parsedEndDate: parsedEnd,
+          inclusionDate: new Date(data.addedAt).toLocaleDateString('pt-BR'),
+          city: 'Rio de Janeiro',
+          state: 'RJ',
+          country: 'Brasil'
+        } as EventData;
+      });
       setEvents(eventsData);
     } catch (error) {
       console.error('Erro ao carregar eventos:', error);
@@ -105,10 +125,15 @@ export default function App() {
   };
 
   const handleCreateEvent = async () => {
+    if (!newEvent.name || !newEvent.start) {
+      alert('Nome e data de início são obrigatórios.');
+      return;
+    }
     try {
+      const startDate = new Date(newEvent.start);
       await addDoc(collection(db, 'eventos'), {
         ...newEvent,
-        year: new Date(newEvent.start).getFullYear().toString(),
+        year: startDate.getFullYear().toString(),
         addedAt: new Date().toISOString()
       });
       alert('Evento criado com sucesso!');
