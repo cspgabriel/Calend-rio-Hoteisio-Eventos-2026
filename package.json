@@ -9,13 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "recharts": "^3.5.1",
-    "lucide-react": "^0.556.0",
-    "react-dom": "^19.2.1",
-    "react": "^19.2.1",
-    "vite": "^7.2.7",
     "@vitejs/plugin-react": "^5.1.2",
-    "html2canvas": "latest"
+    "firebase": "^12.10.0",
+    "html2canvas": "latest",
+    "lucide-react": "^0.556.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "recharts": "^3.5.1",
+    "vite": "^7.2.7"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

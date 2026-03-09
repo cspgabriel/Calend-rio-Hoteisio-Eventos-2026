@@ -15,8 +15,10 @@ import { calculateDemandLevel, normalizeString } from './utils';
 import { 
   Search, LayoutDashboard, List, Calendar as CalendarIcon, 
   Map as MapIcon, TrendingUp, Menu, X, Filter, Download, 
-  ChevronLeft, RotateCcw, Sparkles, Plane 
+  ChevronLeft, RotateCcw, Sparkles, Plane, Plus
 } from 'lucide-react';
+import { collection, addDoc } from 'firebase/firestore';
+import { db } from './firebase';
 
 type ViewType = 'dashboard' | 'list' | 'calendar' | 'location' | 'high-demand' | 'recent-additions' | 'tourism-fairs';
 
@@ -67,6 +69,9 @@ export default function App() {
   const [selectedMonth, setSelectedMonth] = useState('Todos os Meses');
   const [selectedYear, setSelectedYear] = useState('Todos os Anos');
 
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newEvent, setNewEvent] = useState({ name: '', venue: '', type: '', start: '', end: '', neighborhood: '', region: '' });
+
   const clearFilters = () => {
     setSearchTerm('');
     setSelectedRegion('Todas as Regiões');
@@ -75,6 +80,21 @@ export default function App() {
     setSelectedType('Todos os Tipos');
     setSelectedMonth('Todos os Meses');
     setSelectedYear('Todos os Anos');
+  };
+
+  const handleCreateEvent = async () => {
+    try {
+      await addDoc(collection(db, 'events'), {
+        ...newEvent,
+        year: new Date(newEvent.start).getFullYear().toString(),
+        addedAt: new Date().toISOString()
+      });
+      alert('Evento criado com sucesso!');
+      setShowCreateForm(false);
+      setNewEvent({ name: '', venue: '', type: '', start: '', end: '', neighborhood: '', region: '' });
+    } catch (error) {
+      alert('Erro ao criar evento: ' + error.message);
+    }
   };
 
   const filterOptions = useMemo(() => {
@@ -257,6 +277,13 @@ export default function App() {
                             Limpar Filtros
                         </button>
                         <button 
+                            onClick={() => setShowCreateForm(true)}
+                            className="flex items-center gap-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg transition-colors border border-blue-200"
+                        >
+                            <Plus size={16} />
+                            Criar Evento
+                        </button>
+                        <button 
                             onClick={handleDownloadExcel}
                             className="flex items-center gap-2 text-sm font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-4 py-2 rounded-lg transition-colors border border-emerald-200"
                         >
@@ -295,6 +322,25 @@ export default function App() {
                         <option>Todos os Anos</option>
                         {filterOptions.years.map(y => <option key={y} value={y}>{y}</option>)}
                       </select>
+                    </div>
+                  </div>
+                )}
+
+                {showCreateForm && (
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-8">
+                    <h3 className="text-lg font-semibold mb-4">Criar Novo Evento</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <input type="text" placeholder="Nome" value={newEvent.name} onChange={(e) => setNewEvent({...newEvent, name: e.target.value})} className="border p-2 rounded" />
+                      <input type="text" placeholder="Local" value={newEvent.venue} onChange={(e) => setNewEvent({...newEvent, venue: e.target.value})} className="border p-2 rounded" />
+                      <input type="text" placeholder="Tipo" value={newEvent.type} onChange={(e) => setNewEvent({...newEvent, type: e.target.value})} className="border p-2 rounded" />
+                      <input type="date" value={newEvent.start} onChange={(e) => setNewEvent({...newEvent, start: e.target.value})} className="border p-2 rounded" />
+                      <input type="date" value={newEvent.end} onChange={(e) => setNewEvent({...newEvent, end: e.target.value})} className="border p-2 rounded" />
+                      <input type="text" placeholder="Bairro" value={newEvent.neighborhood} onChange={(e) => setNewEvent({...newEvent, neighborhood: e.target.value})} className="border p-2 rounded" />
+                      <input type="text" placeholder="Região" value={newEvent.region} onChange={(e) => setNewEvent({...newEvent, region: e.target.value})} className="border p-2 rounded" />
+                    </div>
+                    <div className="mt-4 flex gap-2">
+                      <button onClick={handleCreateEvent} className="bg-blue-500 text-white px-4 py-2 rounded">Salvar</button>
+                      <button onClick={() => setShowCreateForm(false)} className="bg-gray-500 text-white px-4 py-2 rounded">Cancelar</button>
                     </div>
                   </div>
                 )}
