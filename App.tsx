@@ -11,16 +11,17 @@ import HighDemandView from './components/HighDemandView';
 import UpcomingEvents from './components/UpcomingEvents';
 import RecentAdditionsView from './components/RecentAdditionsView';
 import TourismFairsView from './components/TourismFairsView';
+import AdminPanel from './components/AdminPanel';
 import { calculateDemandLevel, normalizeString } from './utils';
 import { 
   Search, LayoutDashboard, List, Calendar as CalendarIcon, 
   Map as MapIcon, TrendingUp, Menu, X, Filter, Download, 
-  ChevronLeft, RotateCcw, Sparkles, Plane, Plus
+  ChevronLeft, RotateCcw, Sparkles, Plane, Settings
 } from 'lucide-react';
-import { collection, addDoc, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from './firebase';
 
-type ViewType = 'dashboard' | 'list' | 'calendar' | 'location' | 'high-demand' | 'recent-additions' | 'tourism-fairs';
+type ViewType = 'dashboard' | 'list' | 'calendar' | 'location' | 'high-demand' | 'recent-additions' | 'tourism-fairs' | 'admin';
 
 const MONTH_ORDER = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -35,6 +36,7 @@ const NAV_ITEMS = [
   { id: 'calendar', label: 'Por Ano/Mês', icon: CalendarIcon },
   { id: 'location', label: 'Por Localidade', icon: MapIcon },
   { id: 'high-demand', label: 'Mais Público', icon: TrendingUp },
+  { id: 'admin', label: 'Admin', icon: Settings },
 ];
 
 export default function App() {
@@ -70,9 +72,6 @@ export default function App() {
   const [selectedType, setSelectedType] = useState('Todos os Tipos');
   const [selectedMonth, setSelectedMonth] = useState('Todos os Meses');
   const [selectedYear, setSelectedYear] = useState('Todos os Anos');
-
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [newEvent, setNewEvent] = useState({ name: '', venue: '', type: '', start: '', end: '', neighborhood: '', region: '' });
 
   const loadEvents = async () => {
     try {
@@ -125,24 +124,7 @@ export default function App() {
   };
 
   const handleCreateEvent = async () => {
-    if (!newEvent.name || !newEvent.start) {
-      alert('Nome e data de início são obrigatórios.');
-      return;
-    }
-    try {
-      const startDate = new Date(newEvent.start);
-      await addDoc(collection(db, 'eventos'), {
-        ...newEvent,
-        year: startDate.getFullYear().toString(),
-        addedAt: new Date().toISOString()
-      });
-      alert('Evento criado com sucesso!');
-      setShowCreateForm(false);
-      setNewEvent({ name: '', venue: '', type: '', start: '', end: '', neighborhood: '', region: '' });
-      loadEvents();
-    } catch (error) {
-      alert('Erro ao criar evento: ' + error.message);
-    }
+    loadEvents();
   };
 
   const handleDeleteEvent = async (id: string) => {
@@ -313,6 +295,7 @@ export default function App() {
                       {activeView === 'list' && 'Todos os Eventos'}
                       {activeView === 'recent-additions' && 'Eventos Adicionados Recentemente'}
                       {activeView === 'tourism-fairs' && 'Calendário Promocional 2026'}
+                      {activeView === 'admin' && 'Painel Administrativo'}
                   </h2>
               </div>
           </header>
@@ -320,7 +303,7 @@ export default function App() {
           <main className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-6">
               <div className="max-w-7xl mx-auto">
                 
-                {activeView !== 'recent-additions' && activeView !== 'tourism-fairs' && (
+                {activeView !== 'recent-additions' && activeView !== 'tourism-fairs' && activeView !== 'admin' && (
                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-8">
                     <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                       <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -335,14 +318,6 @@ export default function App() {
                             <RotateCcw size={16} />
                             Limpar Filtros
                         </button>
-                        <button 
-                            onClick={() => setShowCreateForm(true)}
-                            className="flex items-center gap-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg transition-colors border border-blue-200"
-                        >
-                            <Plus size={16} />
-                            Criar Evento
-                        </button>
-
                         <button 
                             onClick={handleDownloadExcel}
                             className="flex items-center gap-2 text-sm font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-4 py-2 rounded-lg transition-colors border border-emerald-200"
@@ -388,20 +363,7 @@ export default function App() {
 
                 {showCreateForm && (
                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-8">
-                    <h3 className="text-lg font-semibold mb-4">Criar Novo Evento</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <input type="text" placeholder="Nome" value={newEvent.name} onChange={(e) => setNewEvent({...newEvent, name: e.target.value})} className="border p-2 rounded" />
-                      <input type="text" placeholder="Local" value={newEvent.venue} onChange={(e) => setNewEvent({...newEvent, venue: e.target.value})} className="border p-2 rounded" />
-                      <input type="text" placeholder="Tipo" value={newEvent.type} onChange={(e) => setNewEvent({...newEvent, type: e.target.value})} className="border p-2 rounded" />
-                      <input type="date" value={newEvent.start} onChange={(e) => setNewEvent({...newEvent, start: e.target.value})} className="border p-2 rounded" />
-                      <input type="date" value={newEvent.end} onChange={(e) => setNewEvent({...newEvent, end: e.target.value})} className="border p-2 rounded" />
-                      <input type="text" placeholder="Bairro" value={newEvent.neighborhood} onChange={(e) => setNewEvent({...newEvent, neighborhood: e.target.value})} className="border p-2 rounded" />
-                      <input type="text" placeholder="Região" value={newEvent.region} onChange={(e) => setNewEvent({...newEvent, region: e.target.value})} className="border p-2 rounded" />
-                    </div>
-                    <div className="mt-4 flex gap-2">
-                      <button onClick={handleCreateEvent} className="bg-blue-500 text-white px-4 py-2 rounded">Salvar</button>
-                      <button onClick={() => setShowCreateForm(false)} className="bg-gray-500 text-white px-4 py-2 rounded">Cancelar</button>
-                    </div>
+                    <h3 className="text-lg font-semibold mb-4">Acesse o painel admin para criar eventos</h3>
                   </div>
                 )}
 
@@ -435,6 +397,7 @@ export default function App() {
                     {activeView === 'list' && <EventList events={filteredEvents} onDelete={handleDeleteEvent} />}
                     {activeView === 'recent-additions' && <RecentAdditionsView events={EVENTS} />}
                     {activeView === 'tourism-fairs' && <TourismFairsView events={TOURISM_FAIRS} />}
+                    {activeView === 'admin' && <AdminPanel />}
                 </div>
               </div>
           </main>
