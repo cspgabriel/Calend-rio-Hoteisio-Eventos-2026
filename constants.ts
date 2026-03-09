@@ -1,5 +1,5 @@
-import { EventData } from './types';
-import { parseDate } from './utils';
+import { EventData } from './types.ts';
+import { parseDate } from './utils.ts';
 
 // Helper to safely parse coordinate string "POINT (lng lat)"
 const parsePoint = (pointStr: string): { lat: number, lng: number } => {

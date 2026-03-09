@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { EventData } from '../types';
 import { normalizeString, formatInclusionDate } from '../utils';
-import { MapPin, Calendar, Building2, ArrowUpDown, ArrowUp, ArrowDown, Search, Clock } from 'lucide-react';
+import { MapPin, Calendar, Building2, ArrowUpDown, ArrowUp, ArrowDown, Search, Clock, PlusCircle } from 'lucide-react';
+import type { NewEventInput } from '../services/eventsService';
 
 interface EventListProps {
   events: EventData[];
+  onCreateEvent?: (input: NewEventInput) => Promise<void> | void;
 }
 
 type SortConfig = {
@@ -12,7 +14,7 @@ type SortConfig = {
   direction: 'asc' | 'desc';
 } | null;
 
-const EventList: React.FC<EventListProps> = ({ events }) => {
+const EventList: React.FC<EventListProps> = ({ events, onCreateEvent }) => {
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [filters, setFilters] = useState({
     name: '',
@@ -21,6 +23,17 @@ const EventList: React.FC<EventListProps> = ({ events }) => {
     venue: '',
     type: '',
     inclusion: ''
+  });
+  const [isCreating, setIsCreating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newEvent, setNewEvent] = useState<NewEventInput>({
+    name: '',
+    venue: '',
+    type: '',
+    startDate: '',
+    endDate: '',
+    neighborhood: '',
+    year: '2026'
   });
 
   const requestSort = (key: keyof EventData) => {
@@ -38,6 +51,29 @@ const EventList: React.FC<EventListProps> = ({ events }) => {
     return sortConfig.direction === 'asc' 
       ? <ArrowUp size={14} className="text-blue-500" /> 
       : <ArrowDown size={14} className="text-blue-500" />;
+  };
+
+  const handleCreateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onCreateEvent) return;
+    if (!newEvent.name || !newEvent.startDate || !newEvent.endDate) return;
+
+    setIsSubmitting(true);
+    try {
+      await onCreateEvent(newEvent);
+      setNewEvent({
+        name: '',
+        venue: '',
+        type: '',
+        startDate: '',
+        endDate: '',
+        neighborhood: '',
+        year: newEvent.year
+      });
+      setIsCreating(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const processedEvents = useMemo(() => {
@@ -81,6 +117,88 @@ const EventList: React.FC<EventListProps> = ({ events }) => {
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+      <div className="px-6 pt-4 pb-3 border-b border-slate-200 flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <Building2 size={16} className="text-blue-500" />
+            Gestão de Eventos
+          </h3>
+          {onCreateEvent && (
+            <button
+              type="button"
+              onClick={() => setIsCreating(!isCreating)}
+              className="inline-flex items-center gap-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-md transition-colors"
+            >
+              <PlusCircle size={14} />
+              {isCreating ? 'Fechar formulário' : 'Novo evento'}
+            </button>
+          )}
+        </div>
+
+        {isCreating && (
+          <form onSubmit={handleCreateSubmit} className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-2 text-xs">
+            <input
+              type="text"
+              required
+              placeholder="Nome do evento"
+              className="border rounded px-2 py-1 outline-none"
+              value={newEvent.name}
+              onChange={(e) => setNewEvent({ ...newEvent, name: e.target.value })}
+            />
+            <input
+              type="text"
+              required
+              placeholder="Início (DD/MM/AAAA)"
+              className="border rounded px-2 py-1 outline-none"
+              value={newEvent.startDate}
+              onChange={(e) => setNewEvent({ ...newEvent, startDate: e.target.value })}
+            />
+            <input
+              type="text"
+              required
+              placeholder="Término (DD/MM/AAAA)"
+              className="border rounded px-2 py-1 outline-none"
+              value={newEvent.endDate}
+              onChange={(e) => setNewEvent({ ...newEvent, endDate: e.target.value })}
+            />
+            <input
+              type="text"
+              placeholder="Local"
+              className="border rounded px-2 py-1 outline-none"
+              value={newEvent.venue}
+              onChange={(e) => setNewEvent({ ...newEvent, venue: e.target.value })}
+            />
+            <input
+              type="text"
+              placeholder="Bairro"
+              className="border rounded px-2 py-1 outline-none"
+              value={newEvent.neighborhood}
+              onChange={(e) => setNewEvent({ ...newEvent, neighborhood: e.target.value })}
+            />
+            <input
+              type="text"
+              placeholder="Tipo (show, congresso...)"
+              className="border rounded px-2 py-1 outline-none"
+              value={newEvent.type}
+              onChange={(e) => setNewEvent({ ...newEvent, type: e.target.value })}
+            />
+            <input
+              type="text"
+              placeholder="Ano"
+              className="border rounded px-2 py-1 outline-none"
+              value={newEvent.year}
+              onChange={(e) => setNewEvent({ ...newEvent, year: e.target.value })}
+            />
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="md:col-span-3 lg:col-span-1 inline-flex items-center justify-center text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-md transition-colors disabled:opacity-60"
+            >
+              {isSubmitting ? 'Salvando...' : 'Salvar evento'}
+            </button>
+          </form>
+        )}
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>

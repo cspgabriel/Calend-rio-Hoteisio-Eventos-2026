@@ -12,7 +12,7 @@ import UpcomingEvents from './components/UpcomingEvents';
 import RecentAdditionsView from './components/RecentAdditionsView';
 import TourismFairsView from './components/TourismFairsView';
 import { calculateDemandLevel, normalizeString } from './utils';
-import { fetchEvents, fetchTourismFairs } from './services/eventsService';
+import { fetchEvents, fetchTourismFairs, createEvent, NewEventInput } from './services/eventsService';
 import { 
   Search, LayoutDashboard, List, Calendar as CalendarIcon, 
   Map as MapIcon, TrendingUp, Menu, X, Filter, Download, 
@@ -159,6 +159,16 @@ export default function App() {
 
     return { total, busiestMonth, topNeighborhood, highDemand };
   }, [filteredEvents]);
+
+  const handleCreateEvent = async (input: NewEventInput) => {
+    try {
+      const created = await createEvent(input);
+      setEvents(prev => [...prev, created]);
+    } catch (err) {
+      console.error('Erro ao criar evento no Firebase', err);
+      setError('Não foi possível criar o evento. Tente novamente.');
+    }
+  };
 
   const toggleMobileSidebar = () => setIsMobileSidebarOpen(!isMobileSidebarOpen);
   const toggleDesktopSidebar = () => setIsDesktopSidebarOpen(!isDesktopSidebarOpen);
@@ -360,7 +370,7 @@ export default function App() {
                     {activeView === 'calendar' && <CalendarView events={filteredEvents} />}
                     {activeView === 'location' && <LocationView events={filteredEvents} />}
                     {activeView === 'high-demand' && <HighDemandView events={filteredEvents} />}
-                    {activeView === 'list' && <EventList events={filteredEvents} />}
+                    {activeView === 'list' && <EventList events={filteredEvents} onCreateEvent={handleCreateEvent} />}
                     {activeView === 'recent-additions' && <RecentAdditionsView events={events} />}
                     {activeView === 'tourism-fairs' && <TourismFairsView events={tourismFairs} />}
                 </div>

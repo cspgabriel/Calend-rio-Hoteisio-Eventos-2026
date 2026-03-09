@@ -5,10 +5,15 @@ import { parseDate } from '../utils';
 
 type StoredEvent = Omit<EventData, 'parsedStartDate' | 'parsedEndDate'>;
 
-export type NewEventInput = Omit<
-  EventData,
-  'id' | 'parsedStartDate' | 'parsedEndDate'
->;
+export type NewEventInput = {
+  name: string;
+  venue: string;
+  type: string;
+  startDate: string; // DD/MM/YYYY
+  endDate: string;   // DD/MM/YYYY
+  neighborhood: string;
+  year: string;
+};
 
 const mapFromStoredEvent = (id: string, data: StoredEvent): EventData => {
   return {
@@ -54,9 +59,32 @@ export async function createEvent(
   const newRef = push(eventsRef);
   const id = newRef.key as string;
 
+  const parsedStart = parseDate(event.startDate);
+  const monthFormatter = new Intl.DateTimeFormat('pt-BR', { month: 'long' });
+  const monthName = monthFormatter.format(parsedStart);
+  const month =
+    monthName.charAt(0).toUpperCase() + monthName.slice(1);
+
+  const today = new Date();
+  const day = String(today.getDate()).padStart(2, '0');
+  const monthNum = String(today.getMonth() + 1).padStart(2, '0');
+  const yearNum = today.getFullYear();
+  const inclusionDate = `${day}/${monthNum}/${yearNum}`;
+
   const stored: StoredEvent = {
-    ...event,
-    id
+    id,
+    name: event.name,
+    venue: event.venue,
+    type: event.type,
+    startDate: event.startDate,
+    endDate: event.endDate,
+    month,
+    neighborhood: event.neighborhood,
+    region: 'A definir',
+    year: event.year,
+    lat: 0,
+    lng: 0,
+    inclusionDate
   };
 
   await set(newRef, stored);

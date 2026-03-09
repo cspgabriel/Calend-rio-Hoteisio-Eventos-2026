@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "seed": "ts-node scripts/seedFirebase.ts"
+    "seed": "node --loader ts-node/esm scripts/seedFirebase.ts"
   },
   "dependencies": {
     "firebase": "^11.1.0",

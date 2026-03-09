@@ -1,6 +1,6 @@
 import { ref, set } from 'firebase/database';
-import { database } from '../firebase';
-import { EVENTS, TOURISM_FAIRS } from '../constants';
+import { database } from '../firebase-seed.ts';
+import { EVENTS, TOURISM_FAIRS } from '../constants.ts';
 import type { EventData } from '../types';
 
 type StoredEvent = Omit<EventData, 'parsedStartDate' | 'parsedEndDate'>;
