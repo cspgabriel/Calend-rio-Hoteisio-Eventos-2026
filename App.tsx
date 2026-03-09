@@ -129,6 +129,30 @@ export default function App() {
     }
   };
 
+  const importEventsToFirebase = async () => {
+    try {
+      const batch = [];
+      for (const event of EVENTS) {
+        batch.push(addDoc(collection(db, 'eventos'), {
+          name: event.name,
+          venue: event.venue,
+          type: event.type,
+          start: event.start,
+          end: event.end,
+          neighborhood: event.neighborhood,
+          region: event.region,
+          year: event.year,
+          addedAt: event.addedAt
+        }));
+      }
+      await Promise.all(batch);
+      alert('Eventos importados com sucesso!');
+      loadEvents();
+    } catch (error) {
+      alert('Erro ao importar: ' + error.message);
+    }
+  };
+
   const filterOptions = useMemo(() => {
     const regions = Array.from(new Set(EVENTS.map(e => e.region))).sort();
     const neighborhoods = Array.from(new Set(EVENTS.map(e => e.neighborhood))).sort();
@@ -314,6 +338,12 @@ export default function App() {
                         >
                             <Plus size={16} />
                             Criar Evento
+                        </button>
+                        <button 
+                            onClick={importEventsToFirebase}
+                            className="flex items-center gap-2 text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 px-4 py-2 rounded-lg transition-colors border border-green-200"
+                        >
+                            Importar Eventos
                         </button>
                         <button 
                             onClick={handleDownloadExcel}
