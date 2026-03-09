@@ -116,6 +116,7 @@ const EventList: React.FC<EventListProps> = ({ events, onCreateEvent }) => {
   }, [events, filters, sortConfig]);
 
   return (
+<<<<<<< HEAD
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
       <div className="px-6 pt-4 pb-3 border-b border-slate-200 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
@@ -199,6 +200,9 @@ const EventList: React.FC<EventListProps> = ({ events, onCreateEvent }) => {
           </form>
         )}
       </div>
+=======
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+>>>>>>> 52bcc15d16a549f6a4542418e73b42dc7dfcb9dc
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
