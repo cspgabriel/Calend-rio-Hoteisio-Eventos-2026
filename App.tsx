@@ -76,7 +76,7 @@ export default function App() {
 
   const loadEvents = async () => {
     try {
-      const querySnapshot = await getDocs(collection(db, 'events'));
+      const querySnapshot = await getDocs(collection(db, 'eventos'));
       const eventsData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -104,9 +104,25 @@ export default function App() {
     setSelectedYear('Todos os Anos');
   };
 
+  const handleCreateEvent = async () => {
+    try {
+      await addDoc(collection(db, 'eventos'), {
+        ...newEvent,
+        year: new Date(newEvent.start).getFullYear().toString(),
+        addedAt: new Date().toISOString()
+      });
+      alert('Evento criado com sucesso!');
+      setShowCreateForm(false);
+      setNewEvent({ name: '', venue: '', type: '', start: '', end: '', neighborhood: '', region: '' });
+      loadEvents();
+    } catch (error) {
+      alert('Erro ao criar evento: ' + error.message);
+    }
+  };
+
   const handleDeleteEvent = async (id: string) => {
     try {
-      await deleteDoc(doc(db, 'events', id));
+      await deleteDoc(doc(db, 'eventos', id));
       loadEvents();
     } catch (error) {
       alert('Erro ao excluir evento: ' + error.message);
