@@ -1,12 +1,12 @@
 import express, { Request, Response } from 'express';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import multer from 'multer';
-import fs from 'fs';
-import path from 'path';
 
 const app = express();
-const upload = multer({ dest: 'uploads/' });
-const client = new Anthropic();
+const upload = multer({ storage: multer.memoryStorage() });
+
+const geminiApiKey = process.env.GEMINI_API_KEY;
+const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
 
 app.use(express.json());
 app.use(express.static('dist'));
@@ -23,110 +23,120 @@ interface ParsedEvent {
 
 const EVENT_TYPES = [
   'Show', 'Festival', 'Congresso', 'Conferência', 'Exposição',
-  'Evento', 'Esporte', 'Carnaval', 'Festa', 'Feira'
+  'Evento', 'Esporte', 'Carnaval', 'Feira'
 ];
 
 app.post('/api/parse-events', upload.single('image'), async (req: Request, res: Response) => {
   try {
+    if (!genAI) {
+      return res.status(500).json({
+        events: [],
+        error: 'Missing GEMINI_API_KEY in server environment',
+      });
+    }
+
     const textInput = req.body.input || '';
     const imageFile = req.file;
+
+    if (!textInput && !imageFile) {
+      return res.status(400).json({ 
+        events: [],
+        error: 'Provide text or image input' 
+      });
+    }
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     let prompt = `Você é um assistente especializado em extrair informações de eventos.
 Analise o seguinte ${imageFile ? 'texto e imagem' : 'texto'} e extraia informações sobre eventos.
 
-Para cada evento encontrado, retorne um JSON com esta estrutura:
-{
-  "events": [
-    {
-      "name": "Nome do evento",
-      "venue": "Local/Venue",
-      "type": "Tipo (escolha entre: ${EVENT_TYPES.join(', ')})",
-      "start": "YYYY-MM-DD",
-      "end": "YYYY-MM-DD",
-      "neighborhood": "Bairro (opcional)",
-      "confidence": 0.95
-    }
-  ]
-}
+Para cada evento encontrado, retorne UM JSON array com esta estrutura exata:
+[
+  {
+    "name": "Nome do evento",
+    "venue": "Local/Venue",
+    "type": "Tipo (escolha entre: ${EVENT_TYPES.join(', ')})",
+    "start": "YYYY-MM-DD",
+    "end": "YYYY-MM-DD",
+    "neighborhood": "Bairro (opcional)",
+    "confidence": 0.95
+  }
+]
 
-Texto fornecido:
-${textInput}
+Se não encontrar eventos, retorne um array vazio [].
 
-Retorne APENAS o JSON válido, sem explicações adicionais.`;
+TEXTO PARA ANALISAR:
+${textInput || '(Análise via imagem)'}
 
-    let response;
+RETORNE APENAS O JSON, SEM EXPLICAÇÕES ADICIONAIS.`;
+
+    const content: Array<
+      | { text: string }
+      | { inlineData: { data: string; mimeType: string } }
+    > = [{ text: prompt }];
 
     if (imageFile) {
-      const imageData = fs.readFileSync(imageFile.path);
-      const base64Image = imageData.toString('base64');
-      const mimeType = imageFile.mimetype || 'image/jpeg';
-
-      response = await client.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 1024,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-                  data: base64Image,
-                },
-              },
-              {
-                type: 'text',
-                text: prompt,
-              },
-            ],
-          },
-        ],
-      });
-
-      fs.unlinkSync(imageFile.path);
-    } else {
-      response = await client.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 1024,
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
+      const base64Image = imageFile.buffer.toString('base64');
+      content.push({
+        inlineData: {
+          data: base64Image,
+          mimeType: imageFile.mimetype || 'image/jpeg',
+        },
       });
     }
 
-    const content = response.content[0];
-    if (content.type !== 'text') {
-      throw new Error('Resposta inválida da IA');
-    }
+    const result = await model.generateContent(content);
+    const responseText = result.response.text();
 
-    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+    // Extract JSON from response
+    const jsonMatch = responseText.match(/\[[\s\S]*?\]/);
     if (!jsonMatch) {
-      throw new Error('Não foi possível extrair eventos do texto/imagem');
+      return res.status(400).json({ 
+        events: [],
+        error: 'Could not parse response as JSON' 
+      });
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
-    
-    // Validação básica
-    const events: ParsedEvent[] = (parsed.events || []).filter((event: any) => {
-      return event.name && event.venue && event.start && event.end;
-    });
+    try {
+      const events: ParsedEvent[] = JSON.parse(jsonMatch[0]);
+      
+      // Validate and filter events
+      const validEvents = events.filter(e => 
+        e.name && e.venue && e.type && e.start && e.end
+      ).map(e => ({
+        name: e.name || '',
+        venue: e.venue || '',
+        type: e.type || 'Evento',
+        start: e.start,
+        end: e.end,
+        neighborhood: e.neighborhood || 'A definir',
+        confidence: e.confidence || 0.8
+      }));
 
-    res.json({ events });
+      res.json({ events: validEvents });
+    } catch (parseError) {
+      res.status(400).json({ 
+        events: [],
+        error: 'Failed to parse JSON from response',
+        details: parseError instanceof Error ? parseError.message : 'Unknown error'
+      });
+    }
   } catch (error) {
-    console.error('Erro ao processar eventos:', error);
-    res.status(500).json({
-      error: 'Erro ao processar com IA',
-      details: error instanceof Error ? error.message : 'Erro desconhecido'
+    console.error('Error:', error);
+    res.status(500).json({ 
+      events: [],
+      error: 'Failed to process request',
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
 
-const PORT = process.env.PORT || 5000;
+// Fallback for main app
+app.get('*', (req: Request, res: Response) => {
+  res.sendFile('dist/index.html');
+});
+
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+  console.log(`Server running at http://localhost:${PORT}`);
 });

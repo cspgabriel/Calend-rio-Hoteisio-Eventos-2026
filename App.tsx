@@ -18,7 +18,7 @@ import {
   Map as MapIcon, TrendingUp, Menu, X, Filter, Download, 
   ChevronLeft, RotateCcw, Sparkles, Plane, Settings
 } from 'lucide-react';
-import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 
 type ViewType = 'dashboard' | 'list' | 'calendar' | 'location' | 'high-demand' | 'recent-additions' | 'tourism-fairs' | 'admin';
@@ -36,8 +36,115 @@ const NAV_ITEMS = [
   { id: 'calendar', label: 'Por Ano/Mês', icon: CalendarIcon },
   { id: 'location', label: 'Por Localidade', icon: MapIcon },
   { id: 'high-demand', label: 'Mais Público', icon: TrendingUp },
-  { id: 'admin', label: 'Admin', icon: Settings },
 ];
+
+const parseInclusionDate = (value: string): Date | null => {
+  if (!value || value === 'N/A') return null;
+
+  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (match) {
+    const parsed = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const parsePtBrDate = (value: string): Date | null => {
+  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+  const parsed = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const formatPtBrDate = (date: Date): string => {
+  const d = `${date.getDate()}`.padStart(2, '0');
+  const m = `${date.getMonth() + 1}`.padStart(2, '0');
+  const y = date.getFullYear();
+  return `${d}/${m}/${y}`;
+};
+
+const addDays = (date: Date, days: number): Date => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const dedupeEventsByInclusion = (list: EventData[]): EventData[] => {
+  const grouped = new Map<string, EventData[]>();
+  for (const event of list) {
+    const key = normalizeString(event.name).trim();
+    const bucket = grouped.get(key) || [];
+    bucket.push({
+      ...event,
+      parsedStartDate: new Date(event.parsedStartDate),
+      parsedEndDate: new Date(event.parsedEndDate),
+    });
+    grouped.set(key, bucket);
+  }
+
+  const merged: EventData[] = [];
+
+  for (const events of grouped.values()) {
+    const sorted = [...events].sort((a, b) => {
+      const aStart = parsePtBrDate(a.startDate) || a.parsedStartDate;
+      const bStart = parsePtBrDate(b.startDate) || b.parsedStartDate;
+      return aStart.getTime() - bStart.getTime();
+    });
+
+    const acc: EventData[] = [];
+
+    for (const next of sorted) {
+      const current = acc[acc.length - 1];
+      if (!current) {
+        acc.push(next);
+        continue;
+      }
+
+      const currentStart = parsePtBrDate(current.startDate) || current.parsedStartDate;
+      const currentEnd = parsePtBrDate(current.endDate) || current.parsedEndDate;
+      const nextStart = parsePtBrDate(next.startDate) || next.parsedStartDate;
+      const nextEnd = parsePtBrDate(next.endDate) || next.parsedEndDate;
+
+      const isSequentialOrOverlap = nextStart.getTime() <= addDays(currentEnd, 1).getTime();
+
+      if (!isSequentialOrOverlap) {
+        acc.push(next);
+        continue;
+      }
+
+      const mergedStart = currentStart.getTime() <= nextStart.getTime() ? currentStart : nextStart;
+      const mergedEnd = currentEnd.getTime() >= nextEnd.getTime() ? currentEnd : nextEnd;
+      current.parsedStartDate = mergedStart;
+      current.parsedEndDate = mergedEnd;
+      current.startDate = formatPtBrDate(mergedStart);
+      current.endDate = formatPtBrDate(mergedEnd);
+      current.month = mergedStart.toLocaleDateString('pt-BR', { month: 'long' });
+      current.year = `${mergedStart.getFullYear()}`;
+
+      const currentInc = parseInclusionDate(current.inclusionDate);
+      const nextInc = parseInclusionDate(next.inclusionDate);
+      if ((!currentInc && nextInc) || (currentInc && nextInc && nextInc.getTime() > currentInc.getTime())) {
+        current.inclusionDate = next.inclusionDate;
+      }
+
+      if ((!current.venue || current.venue === 'A definir') && next.venue && next.venue !== 'A definir') {
+        current.venue = next.venue;
+      }
+      if ((!current.neighborhood || current.neighborhood === 'A definir') && next.neighborhood && next.neighborhood !== 'A definir') {
+        current.neighborhood = next.neighborhood;
+      }
+      if ((!current.region || current.region === 'A definir') && next.region && next.region !== 'A definir') {
+        current.region = next.region;
+      }
+    }
+
+    merged.push(...acc);
+  }
+
+  return merged;
+};
 
 export default function App() {
   const [activeView, setActiveView] = useState<ViewType>('list');
@@ -50,6 +157,14 @@ export default function App() {
       return params.get('mode') === 'embed';
     }
     return false;
+  }, []);
+
+  const isAdminRoute = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    const normalizedPath = window.location.pathname.replace(/\/+$/, '');
+    return normalizedPath === '/admin' || normalizedPath.endsWith('/admin');
   }, []);
 
   useEffect(() => {
@@ -78,26 +193,30 @@ export default function App() {
       const querySnapshot = await getDocs(collection(db, 'eventos'));
       const eventsData = querySnapshot.docs.map(doc => {
         const data = doc.data();
-        const startDate = data.start; // Assume YYYY-MM-DD
-        const endDate = data.end;
-        const parsedStart = new Date(startDate);
-        const parsedEnd = new Date(endDate);
+        const startDate = data.start.toDate ? data.start.toDate() : new Date(data.start);
+        const endDate = data.end.toDate ? data.end.toDate() : new Date(data.end);
+        const addedAtRaw = data.addedAt;
+        const addedAtDate =
+          addedAtRaw?.toDate
+            ? addedAtRaw.toDate()
+            : parseInclusionDate(String(addedAtRaw || ''));
+        
         return {
           id: doc.id,
           name: data.name,
           venue: data.venue,
           type: data.type,
-          startDate: startDate.split('-').reverse().join('/'), // Convert to DD/MM/YYYY
-          endDate: endDate.split('-').reverse().join('/'),
-          month: parsedStart.toLocaleDateString('pt-BR', { month: 'long' }),
+          startDate: startDate.toLocaleDateString('pt-BR'),
+          endDate: endDate.toLocaleDateString('pt-BR'),
+          month: startDate.toLocaleDateString('pt-BR', { month: 'long' }),
           neighborhood: data.neighborhood,
           region: data.region,
-          year: data.year,
+          year: startDate.getFullYear().toString(),
           lat: 0, // Placeholder
           lng: 0, // Placeholder
-          parsedStartDate: parsedStart,
-          parsedEndDate: parsedEnd,
-          inclusionDate: new Date(data.addedAt).toLocaleDateString('pt-BR'),
+          parsedStartDate: startDate,
+          parsedEndDate: endDate,
+          inclusionDate: addedAtDate ? addedAtDate.toLocaleDateString('pt-BR') : 'N/A',
           city: 'Rio de Janeiro',
           state: 'RJ',
           country: 'Brasil'
@@ -123,35 +242,26 @@ export default function App() {
     setSelectedYear('Todos os Anos');
   };
 
-  const handleCreateEvent = async () => {
-    loadEvents();
-  };
-
-  const handleDeleteEvent = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, 'eventos', id));
-      loadEvents();
-    } catch (error) {
-      alert('Erro ao excluir evento: ' + error.message);
-    }
-  };
+  
 
 
 
   const filterOptions = useMemo(() => {
-    const regions = Array.from(new Set(EVENTS.map(e => e.region))).sort();
-    const neighborhoods = Array.from(new Set(EVENTS.map(e => e.neighborhood))).sort();
-    const venues = Array.from(new Set(EVENTS.map(e => e.venue))).sort();
-    const types = Array.from(new Set(EVENTS.map(e => e.type))).sort();
-    const years = Array.from(new Set(EVENTS.map(e => e.year))).sort();
+    const uniqueEvents = dedupeEventsByInclusion(events.concat(EVENTS));
+    const regions = Array.from(new Set(uniqueEvents.map(e => e.region))).sort();
+    const neighborhoods = Array.from(new Set(uniqueEvents.map(e => e.neighborhood))).sort();
+    const venues = Array.from(new Set(uniqueEvents.map(e => e.venue))).sort();
+    const types = Array.from(new Set(uniqueEvents.map(e => e.type))).sort();
+    const years = Array.from(new Set(uniqueEvents.map(e => e.year))).sort();
     const months = MONTH_ORDER;
     return { regions, neighborhoods, venues, types, months, years };
-  }, []);
+  }, [events]);
 
   const filteredEvents = useMemo(() => {
     const normalizedSearch = normalizeString(searchTerm);
+    const uniqueEvents = dedupeEventsByInclusion(events.concat(EVENTS));
 
-    return events.concat(EVENTS).filter(event => {
+    return uniqueEvents.filter(event => {
       const matchesSearch = searchTerm === '' ||
         normalizeString(event.name).includes(normalizedSearch) ||
         normalizeString(event.venue).includes(normalizedSearch) ||
@@ -231,7 +341,11 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen bg-slate-50 flex ${isEmbed ? 'flex-col' : 'flex-row'}`}>
+    <>
+      {isAdminRoute ? (
+        <AdminPanel />
+      ) : (
+        <div className={`min-h-screen bg-slate-50 flex ${isEmbed ? 'flex-col' : 'flex-row'}`}>
       
       {isMobileSidebarOpen && (
           <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" onClick={toggleMobileSidebar}></div>
@@ -295,7 +409,6 @@ export default function App() {
                       {activeView === 'list' && 'Todos os Eventos'}
                       {activeView === 'recent-additions' && 'Eventos Adicionados Recentemente'}
                       {activeView === 'tourism-fairs' && 'Calendário Promocional 2026'}
-                      {activeView === 'admin' && 'Painel Administrativo'}
                   </h2>
               </div>
           </header>
@@ -303,7 +416,7 @@ export default function App() {
           <main className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-6">
               <div className="max-w-7xl mx-auto">
                 
-                {activeView !== 'recent-additions' && activeView !== 'tourism-fairs' && activeView !== 'admin' && (
+                {activeView !== 'recent-additions' && activeView !== 'tourism-fairs' && (
                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-8">
                     <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                       <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -361,12 +474,6 @@ export default function App() {
                   </div>
                 )}
 
-                {showCreateForm && (
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-8">
-                    <h3 className="text-lg font-semibold mb-4">Acesse o painel admin para criar eventos</h3>
-                  </div>
-                )}
-
                 {activeView !== 'recent-additions' && activeView !== 'tourism-fairs' && (
                   <StatsCards totalEvents={stats.total} busiestMonth={stats.busiestMonth} topNeighborhood={stats.topNeighborhood} highDemandCount={stats.highDemand} events={filteredEvents} />
                 )}
@@ -394,14 +501,15 @@ export default function App() {
                     {activeView === 'calendar' && <CalendarView events={filteredEvents} />}
                     {activeView === 'location' && <LocationView events={filteredEvents} />}
                     {activeView === 'high-demand' && <HighDemandView events={filteredEvents} />}
-                    {activeView === 'list' && <EventList events={filteredEvents} onDelete={handleDeleteEvent} />}
+                    {activeView === 'list' && <EventList events={filteredEvents} />}
                     {activeView === 'recent-additions' && <RecentAdditionsView events={EVENTS} />}
                     {activeView === 'tourism-fairs' && <TourismFairsView events={TOURISM_FAIRS} />}
-                    {activeView === 'admin' && <AdminPanel />}
                 </div>
               </div>
           </main>
+        </div>
       </div>
-    </div>
+      )}
+    </>
   );
 }

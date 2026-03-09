@@ -1,378 +1,432 @@
-import React, { useState } from 'react';
-import { Plus, Upload, Zap, AlertCircle, CheckCircle, Loader } from 'lucide-react';
-import { EventData } from '../types';
-import { addDoc, collection } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { Plus, AlertCircle, CheckCircle, Lock } from 'lucide-react';
+import { addDoc, collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import EventList from './EventList';
+import { EventData } from '../types';
 
-interface ParsedEvent {
-  name: string;
-  venue: string;
-  type: string;
-  start: string;
-  end: string;
-  neighborhood?: string;
-  description?: string;
-  confidence?: number;
-}
+import { EVENTS } from '../constants';
+
+const normalizeKey = (value: string): string =>
+  value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+const parseInclusionDate = (value: string): Date | null => {
+  if (!value || value === 'N/A') return null;
+
+  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (match) {
+    const parsed = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const parsePtBrDate = (value: string): Date | null => {
+  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+  const parsed = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const formatPtBrDate = (date: Date): string => {
+  const d = `${date.getDate()}`.padStart(2, '0');
+  const m = `${date.getMonth() + 1}`.padStart(2, '0');
+  const y = date.getFullYear();
+  return `${d}/${m}/${y}`;
+};
+
+const addDays = (date: Date, days: number): Date => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const toInputDate = (ptBrDate: string): string => {
+  const parsed = parsePtBrDate(ptBrDate);
+  if (!parsed) return '';
+  const y = parsed.getFullYear();
+  const m = `${parsed.getMonth() + 1}`.padStart(2, '0');
+  const d = `${parsed.getDate()}`.padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const dedupeEventsByInclusion = (list: EventData[]): EventData[] => {
+  const grouped = new Map<string, EventData[]>();
+  for (const event of list) {
+    const key = normalizeKey(event.name);
+    const bucket = grouped.get(key) || [];
+    bucket.push({
+      ...event,
+      parsedStartDate: new Date(event.parsedStartDate),
+      parsedEndDate: new Date(event.parsedEndDate),
+    });
+    grouped.set(key, bucket);
+  }
+
+  const merged: EventData[] = [];
+
+  for (const events of grouped.values()) {
+    const sorted = [...events].sort((a, b) => {
+      const aStart = parsePtBrDate(a.startDate) || a.parsedStartDate;
+      const bStart = parsePtBrDate(b.startDate) || b.parsedStartDate;
+      return aStart.getTime() - bStart.getTime();
+    });
+
+    const acc: EventData[] = [];
+
+    for (const next of sorted) {
+      const current = acc[acc.length - 1];
+      if (!current) {
+        acc.push(next);
+        continue;
+      }
+
+      const currentStart = parsePtBrDate(current.startDate) || current.parsedStartDate;
+      const currentEnd = parsePtBrDate(current.endDate) || current.parsedEndDate;
+      const nextStart = parsePtBrDate(next.startDate) || next.parsedStartDate;
+      const nextEnd = parsePtBrDate(next.endDate) || next.parsedEndDate;
+
+      const isSequentialOrOverlap = nextStart.getTime() <= addDays(currentEnd, 1).getTime();
+
+      if (!isSequentialOrOverlap) {
+        acc.push(next);
+        continue;
+      }
+
+      const mergedStart = currentStart.getTime() <= nextStart.getTime() ? currentStart : nextStart;
+      const mergedEnd = currentEnd.getTime() >= nextEnd.getTime() ? currentEnd : nextEnd;
+      current.parsedStartDate = mergedStart;
+      current.parsedEndDate = mergedEnd;
+      current.startDate = formatPtBrDate(mergedStart);
+      current.endDate = formatPtBrDate(mergedEnd);
+      current.month = mergedStart.toLocaleDateString('pt-BR', { month: 'long' });
+      current.year = `${mergedStart.getFullYear()}`;
+
+      const currentInc = parseInclusionDate(current.inclusionDate);
+      const nextInc = parseInclusionDate(next.inclusionDate);
+      if ((!currentInc && nextInc) || (currentInc && nextInc && nextInc.getTime() > currentInc.getTime())) {
+        current.inclusionDate = next.inclusionDate;
+      }
+
+      if ((!current.venue || current.venue === 'A definir') && next.venue && next.venue !== 'A definir') {
+        current.venue = next.venue;
+      }
+      if ((!current.neighborhood || current.neighborhood === 'A definir') && next.neighborhood && next.neighborhood !== 'A definir') {
+        current.neighborhood = next.neighborhood;
+      }
+      if ((!current.region || current.region === 'A definir') && next.region && next.region !== 'A definir') {
+        current.region = next.region;
+      }
+    }
+
+    merged.push(...acc);
+  }
+
+  return merged;
+};
 
 export default function AdminPanel() {
-  const [activeTab, setActiveTab] = useState<'manual' | 'ai'>('manual');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [events, setEvents] = useState<EventData[]>([]);
   const [formData, setFormData] = useState({
     name: '',
-    venue: '',
     type: '',
     start: '',
     end: '',
     neighborhood: '',
+    region: '',
+    year: '',
   });
-  const [aiInput, setAiInput] = useState('');
-  const [aiImage, setAiImage] = useState<File | null>(null);
-  const [parsedEvents, setParsedEvents] = useState<ParsedEvent[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  useEffect(() => {
+    const savedAuth = localStorage.getItem('adminAuth');
+    if (savedAuth === 'true') {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  const loadEvents = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'eventos'));
+      const eventsData = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        const startDate = data.start.toDate ? data.start.toDate() : new Date(data.start);
+        const endDate = data.end.toDate ? data.end.toDate() : new Date(data.end);
+        const addedAtRaw = data.addedAt;
+        const addedAtDate =
+          addedAtRaw?.toDate
+            ? addedAtRaw.toDate()
+            : parseInclusionDate(String(addedAtRaw || ''));
+
+        return {
+          id: doc.id,
+          name: data.name,
+          venue: data.venue,
+          type: data.type,
+          startDate: startDate.toLocaleDateString('pt-BR'),
+          endDate: endDate.toLocaleDateString('pt-BR'),
+          month: startDate.toLocaleDateString('pt-BR', { month: 'long' }),
+          neighborhood: data.neighborhood,
+          region: data.region,
+          year: startDate.getFullYear().toString(),
+          lat: 0,
+          lng: 0,
+          parsedStartDate: startDate,
+          parsedEndDate: endDate,
+          inclusionDate: addedAtDate ? addedAtDate.toLocaleDateString('pt-BR') : 'N/A',
+          city: 'Rio de Janeiro',
+          state: 'RJ',
+          country: 'Brasil'
+        } as EventData;
+      });
+      setEvents(dedupeEventsByInclusion(eventsData.concat(EVENTS)));
+    } catch (error) {
+      console.error('Erro ao carregar eventos:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadEvents();
+    }
+  }, [isAuthenticated]);
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password === 'admin123') {
+      setIsAuthenticated(true);
+      localStorage.setItem('adminAuth', 'true');
+      setPassword('');
+      setPasswordError('');
+      loadEvents();
+    } else {
+      setPasswordError('Senha incorreta');
+      setPassword('');
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleEditEvent = (event: EventData) => {
+    const isStaticEvent = event.id.startsWith('evt-') || event.id.startsWith('tf-');
+    if (isStaticEvent) {
+      setMessage({ type: 'error', text: 'Este evento é da base fixa e não pode ser editado por aqui.' });
+      return;
+    }
+
+    setEditingEventId(event.id);
+    setFormData({
+      name: event.name || '',
+      type: event.type || '',
+      start: toInputDate(event.startDate),
+      end: toInputDate(event.endDate),
+      neighborhood: event.neighborhood || '',
+      region: event.region || '',
+      year: event.year || '',
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.venue || !formData.type || !formData.start || !formData.end) {
+    if (!formData.name || !formData.type || !formData.start || !formData.end) {
       setMessage({ type: 'error', text: 'Preencha todos os campos obrigatórios' });
       return;
     }
 
     try {
-      await addDoc(collection(db, 'eventos'), {
+      const payload = {
         name: formData.name,
-        venue: formData.venue,
+        venue: 'A definir',
         type: formData.type,
         start: new Date(formData.start),
         end: new Date(formData.end),
         neighborhood: formData.neighborhood || 'A definir',
-        addedAt: new Date().toLocaleDateString('pt-BR'),
-      });
-      
-      setMessage({ type: 'success', text: 'Evento criado com sucesso!' });
-      setFormData({ name: '', venue: '', type: '', start: '', end: '', neighborhood: '' });
-    } catch (error) {
-      setMessage({ type: 'error', text: `Erro ao criar evento: ${error.message}` });
-    }
-  };
+        region: formData.region || 'A definir',
+        year: formData.year || new Date(formData.start).getFullYear().toString(),
+      };
 
-  const handleProcessAI = async () => {
-    if (!aiInput && !aiImage) {
-      setMessage({ type: 'error', text: 'Digite um texto ou envie uma imagem' });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const formDataAI = new FormData();
-      formDataAI.append('input', aiInput);
-      if (aiImage) {
-        formDataAI.append('image', aiImage);
+      if (editingEventId) {
+        await updateDoc(doc(db, 'eventos', editingEventId), {
+          ...payload,
+          updatedAt: new Date().toISOString(),
+        });
+        setMessage({ type: 'success', text: 'Evento atualizado com sucesso!' });
+      } else {
+        await addDoc(collection(db, 'eventos'), {
+          ...payload,
+          addedAt: new Date().toISOString(),
+        });
+        setMessage({ type: 'success', text: 'Evento criado com sucesso!' });
       }
 
-      const response = await fetch('/api/parse-events', {
-        method: 'POST',
-        body: formDataAI,
-      });
-
-      if (!response.ok) {
-        throw new Error('Erro ao processar com IA');
-      }
-
-      const data = await response.json();
-      setParsedEvents(data.events);
-      setMessage({ type: 'success', text: `${data.events.length} evento(s) detectado(s)` });
+      setEditingEventId(null);
+      setFormData({ name: '', type: '', start: '', end: '', neighborhood: '', region: '', year: '' });
+      loadEvents();
+      setTimeout(() => setMessage(null), 3000);
     } catch (error) {
-      setMessage({ type: 'error', text: `Erro: ${error.message}` });
-    } finally {
-      setLoading(false);
+      setMessage({ type: 'error', text: `Erro ao salvar evento: ${error instanceof Error ? error.message : 'Erro desconhecido'}` });
     }
   };
-
-  const handleCreateFromAI = async (event: ParsedEvent) => {
+  
+  const handleDeleteEvent = async (id: string) => {
     try {
-      await addDoc(collection(db, 'eventos'), {
-        name: event.name,
-        venue: event.venue || 'A definir',
-        type: event.type || 'Evento',
-        start: new Date(event.start),
-        end: new Date(event.end),
-        neighborhood: event.neighborhood || 'A definir',
-        addedAt: new Date().toLocaleDateString('pt-BR'),
-      });
-      
-      setParsedEvents(prev => prev.filter(e => e.name !== event.name));
-      setMessage({ type: 'success', text: `"${event.name}" criado com sucesso!` });
+      await deleteDoc(doc(db, 'eventos', id));
+      loadEvents();
     } catch (error) {
-      setMessage({ type: 'error', text: `Erro: ${error.message}` });
-    }
-  };
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      setAiImage(e.target.files[0]);
+      alert('Erro ao excluir evento: ' + (error as Error).message);
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          {/* Header */}
           <div className="bg-gradient-to-r from-purple-600 to-blue-600 p-6 text-white">
             <h1 className="text-3xl font-bold flex items-center gap-2">
               🔐 Painel Administrativo
             </h1>
-            <p className="mt-2 text-purple-100">Gerencie eventos de forma segura</p>
+            <p className="mt-2 text-purple-100">Crie e gerencie eventos de forma segura</p>
           </div>
 
-          {/* Tabs */}
-          <div className="flex border-b">
-            <button
-              onClick={() => setActiveTab('manual')}
-              className={`flex-1 py-4 px-6 font-medium transition-colors ${
-                activeTab === 'manual'
-                  ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Plus size={18} className="inline mr-2" />
-              Criar Evento Manual
-            </button>
-            <button
-              onClick={() => setActiveTab('ai')}
-              className={`flex-1 py-4 px-6 font-medium transition-colors ${
-                activeTab === 'ai'
-                  ? 'text-purple-600 border-b-2 border-purple-600 bg-purple-50'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Zap size={18} className="inline mr-2" />
-              IA - Processar Imagem/Texto
-            </button>
-          </div>
-
-          {/* Content */}
-          <div className="p-6">
-            {/* Messages */}
-            {message && (
-              <div className={`mb-6 p-4 rounded-lg flex items-gap-2 ${
-                message.type === 'success' 
-                  ? 'bg-green-50 text-green-800' 
-                  : 'bg-red-50 text-red-800'
-              }`}>
-                {message.type === 'success' ? (
-                  <CheckCircle size={20} className="mr-2 flex-shrink-0" />
-                ) : (
-                  <AlertCircle size={20} className="mr-2 flex-shrink-0" />
-                )}
-                {message.text}
-              </div>
-            )}
-
-            {/* Manual Form */}
-            {activeTab === 'manual' && (
-              <form onSubmit={handleCreateEvent} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Nome do Evento *
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ex: Show Luan Santana"
-                  />
+          {!isAuthenticated ? (
+            <div className="p-8">
+              <div className="max-w-md mx-auto">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+                  <Lock className="w-12 h-12 text-blue-600 mx-auto mb-4" />
+                  <h2 className="text-xl font-semibold text-blue-900 text-center mb-2">Acesso Restrito</h2>
+                  <p className="text-center text-blue-800">Digite a senha para acessar o painel administrativo</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Venue *
-                    </label>
-                    <input
-                      type="text"
-                      name="venue"
-                      value={formData.venue}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Ex: Parque Olímpico"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Tipo *
-                    </label>
-                    <select
-                      name="type"
-                      value={formData.type}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Selecione...</option>
-                      <option value="Show">Show</option>
-                      <option value="Festival">Festival</option>
-                      <option value="Congresso">Congresso</option>
-                      <option value="Conferência">Conferência</option>
-                      <option value="Exposição">Exposição</option>
-                      <option value="Evento">Evento</option>
-                      <option value="Esporte">Esporte</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Data Início *
-                    </label>
-                    <input
-                      type="date"
-                      name="start"
-                      value={formData.start}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Data Fim *
-                    </label>
-                    <input
-                      type="date"
-                      name="end"
-                      value={formData.end}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Bairro
-                  </label>
-                  <input
-                    type="text"
-                    name="neighborhood"
-                    value={formData.neighborhood}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ex: Barra da Tijuca"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  <Plus size={20} />
-                  Criar Evento
-                </button>
-              </form>
-            )}
-
-            {/* AI Form */}
-            {activeTab === 'ai' && (
-              <div className="space-y-4">
-                <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-                  <p className="text-sm text-blue-800">
-                    💡 Cole um texto sobre eventos ou envie uma imagem e a IA extrairá automaticamente as informações
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Texto / Descrição
-                  </label>
-                  <textarea
-                    value={aiInput}
-                    onChange={(e) => setAiInput(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    placeholder="Cole aqui o texto sobre eventos, horários, locais, etc..."
-                    rows={5}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Ou envie uma imagem
-                  </label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-purple-500 hover:bg-purple-50 transition-colors">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="hidden"
-                      id="imageInput"
-                    />
-                    <label htmlFor="imageInput" className="cursor-pointer block">
-                      <Upload size={24} className="mx-auto mb-2 text-gray-400" />
-                      <p className="text-sm text-gray-600">
-                        {aiImage ? aiImage.name : 'Clique para enviar imagem'}
-                      </p>
-                    </label>
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleProcessAI}
-                  disabled={loading}
-                  className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-medium py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <>
-                      <Loader size={20} className="animate-spin" />
-                      Processando...
-                    </>
-                  ) : (
-                    <>
-                      <Zap size={20} />
-                      Processar com IA
-                    </>
+                <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                  {passwordError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-800">
+                      <AlertCircle size={20} className="flex-shrink-0" />
+                      {passwordError}
+                    </div>
                   )}
-                </button>
-
-                {/* Parsed Events */}
-                {parsedEvents.length > 0 && (
-                  <div className="mt-6 space-y-4">
-                    <h3 className="text-lg font-semibold text-gray-800">
-                      Eventos Detectados ({parsedEvents.length})
-                    </h3>
-                    {parsedEvents.map((event, idx) => (
-                      <div key={idx} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                        <h4 className="font-semibold text-gray-800">{event.name}</h4>
-                        <div className="mt-2 text-sm text-gray-600 space-y-1">
-                          <p><strong>Venue:</strong> {event.venue || 'A definir'}</p>
-                          <p><strong>Tipo:</strong> {event.type || 'Evento'}</p>
-                          <p><strong>Data:</strong> {event.start} a {event.end}</p>
-                          {event.neighborhood && <p><strong>Bairro:</strong> {event.neighborhood}</p>}
-                          {event.confidence && <p><strong>Confiança:</strong> {Math.round(event.confidence * 100)}%</p>}
-                        </div>
-                        <button
-                          onClick={() => handleCreateFromAI(event)}
-                          className="mt-4 w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded transition-colors flex items-center justify-center gap-2"
-                        >
-                          <CheckCircle size={18} />
-                          Criar Evento
-                        </button>
-                      </div>
-                    ))}
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Senha
+                    </label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Digite a senha"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-lg tracking-widest"
+                      autoFocus
+                    />
                   </div>
-                )}
+
+                  <button
+                    type="submit"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-colors"
+                  >
+                    Acessar Painel
+                  </button>
+                </form>
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="p-8">
+              {message && (
+                <div className={`mb-6 p-4 rounded-lg flex items-center gap-2 ${
+                  message.type === 'success' 
+                    ? 'bg-green-50 text-green-800 border border-green-200' 
+                    : 'bg-red-50 text-red-800 border border-red-200'
+                }`}>
+                  {message.type === 'success' ? (
+                    <CheckCircle size={20} className="flex-shrink-0" />
+                  ) : (
+                    <AlertCircle size={20} className="flex-shrink-0" />
+                  )}
+                  {message.text}
+                </div>
+              )}
+
+              <div className="mb-8">
+                <h2 className="text-xl font-semibold text-gray-800 mb-4">
+                  {editingEventId ? 'Editar Evento' : 'Adicionar Novo Evento'}
+                </h2>
+                <form onSubmit={handleCreateEvent} className="space-y-4 bg-gray-50 p-6 rounded-lg border border-gray-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <input type="text" name="name" value={formData.name} onChange={handleInputChange} placeholder="Nome do Evento *" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <select name="type" value={formData.type} onChange={handleInputChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Selecione o Tipo *</option>
+                    <option value="Show">Show</option>
+                    <option value="Festival">Festival</option>
+                    <option value="Congresso">Congresso</option>
+                    <option value="Conferência">Conferência</option>
+                    <option value="Exposição">Exposição</option>
+                    <option value="Evento">Evento</option>
+                    <option value="Esporte">Esporte</option>
+                    <option value="Carnaval">Carnaval</option>
+                    <option value="Feira">Feira</option>
+                  </select>
+                  <input type="date" name="start" value={formData.start} onChange={handleInputChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="date" name="end" value={formData.end} onChange={handleInputChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="text" name="neighborhood" value={formData.neighborhood} onChange={handleInputChange} placeholder="Bairro" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="text" name="region" value={formData.region} onChange={handleInputChange} placeholder="Região" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="text" name="year" value={formData.year} onChange={handleInputChange} placeholder="Ano" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Plus size={20} />
+                    {editingEventId ? 'Atualizar Evento' : 'Adicionar Evento'}
+                  </button>
+                  {editingEventId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingEventId(null);
+                        setFormData({ name: '', type: '', start: '', end: '', neighborhood: '', region: '', year: '' });
+                      }}
+                      className="w-full md:w-auto ml-0 md:ml-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-6 rounded-lg transition-colors"
+                    >
+                      Cancelar edição
+                    </button>
+                  )}
+                </form>
+              </div>
+
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">Lista de Eventos</h2>
+              <EventList events={events} onDelete={handleDeleteEvent} onEdit={handleEditEvent} />
+
+              <div className="mt-6 pt-6 border-t border-gray-200 space-y-3">
+                <button
+                  onClick={() => {
+                    window.location.href = '/';
+                  }}
+                  className="w-full text-sm text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg py-2 transition-colors"
+                >
+                  Ir para o site principal
+                </button>
+                <button
+                  onClick={() => {
+                    setIsAuthenticated(false);
+                    localStorage.removeItem('adminAuth');
+                  }}
+                  className="w-full text-sm text-gray-600 hover:text-gray-900"
+                >
+                  Sair do painel administrativo
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
