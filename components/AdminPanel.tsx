@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, AlertCircle, CheckCircle, Lock } from 'lucide-react';
+import { Plus, AlertCircle, CheckCircle, Lock, X } from 'lucide-react';
 import { addDoc, collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import EventList from './EventList';
 import { EventData } from '../types';
-
-import { EVENTS } from '../constants';
 
 const normalizeKey = (value: string): string =>
   value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -50,6 +48,43 @@ const toInputDate = (ptBrDate: string): string => {
   const m = `${parsed.getMonth() + 1}`.padStart(2, '0');
   const d = `${parsed.getDate()}`.padStart(2, '0');
   return `${y}-${m}-${d}`;
+};
+
+const parseInputDate = (value: string): Date => {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0, 0);
+};
+
+const parseStoredDate = (value: unknown): Date => {
+  if ((value as any)?.toDate) {
+    return (value as any).toDate();
+  }
+  if (value instanceof Date) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const ptBr = parsePtBrDate(value);
+    if (ptBr) return ptBr;
+
+    const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) {
+      return new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]), 12, 0, 0, 0);
+    }
+
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return new Date();
+};
+
+const EMPTY_FORM_DATA = {
+  name: '',
+  type: '',
+  start: '',
+  end: '',
+  neighborhood: '',
+  region: '',
+  year: '',
 };
 
 const dedupeEventsByInclusion = (list: EventData[]): EventData[] => {
@@ -132,16 +167,10 @@ export default function AdminPanel() {
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [events, setEvents] = useState<EventData[]>([]);
-  const [formData, setFormData] = useState({
-    name: '',
-    type: '',
-    start: '',
-    end: '',
-    neighborhood: '',
-    region: '',
-    year: '',
-  });
+  const [formData, setFormData] = useState(EMPTY_FORM_DATA);
+  const [editFormData, setEditFormData] = useState(EMPTY_FORM_DATA);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
@@ -156,8 +185,8 @@ export default function AdminPanel() {
       const querySnapshot = await getDocs(collection(db, 'eventos'));
       const eventsData = querySnapshot.docs.map(doc => {
         const data = doc.data();
-        const startDate = data.start.toDate ? data.start.toDate() : new Date(data.start);
-        const endDate = data.end.toDate ? data.end.toDate() : new Date(data.end);
+        const startDate = parseStoredDate(data.start);
+        const endDate = parseStoredDate(data.end);
         const addedAtRaw = data.addedAt;
         const addedAtDate =
           addedAtRaw?.toDate
@@ -185,7 +214,7 @@ export default function AdminPanel() {
           country: 'Brasil'
         } as EventData;
       });
-      setEvents(dedupeEventsByInclusion(eventsData.concat(EVENTS)));
+      setEvents(dedupeEventsByInclusion(eventsData));
     } catch (error) {
       console.error('Erro ao carregar eventos:', error);
     }
@@ -216,6 +245,11 @@ export default function AdminPanel() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setEditFormData(prev => ({ ...prev, [name]: value }));
+  };
+
   const handleEditEvent = (event: EventData) => {
     const isStaticEvent = event.id.startsWith('evt-') || event.id.startsWith('tf-');
     if (isStaticEvent) {
@@ -224,7 +258,7 @@ export default function AdminPanel() {
     }
 
     setEditingEventId(event.id);
-    setFormData({
+    setEditFormData({
       name: event.name || '',
       type: event.type || '',
       start: toInputDate(event.startDate),
@@ -233,7 +267,7 @@ export default function AdminPanel() {
       region: event.region || '',
       year: event.year || '',
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setIsEditModalOpen(true);
   };
 
   const handleCreateEvent = async (e: React.FormEvent) => {
@@ -245,37 +279,58 @@ export default function AdminPanel() {
     }
 
     try {
-      const payload = {
+      await addDoc(collection(db, 'eventos'), {
         name: formData.name,
         venue: 'A definir',
         type: formData.type,
-        start: new Date(formData.start),
-        end: new Date(formData.end),
+        start: parseInputDate(formData.start),
+        end: parseInputDate(formData.end),
         neighborhood: formData.neighborhood || 'A definir',
         region: formData.region || 'A definir',
-        year: formData.year || new Date(formData.start).getFullYear().toString(),
-      };
+        year: formData.year || parseInputDate(formData.start).getFullYear().toString(),
+        addedAt: new Date().toISOString(),
+      });
 
-      if (editingEventId) {
-        await updateDoc(doc(db, 'eventos', editingEventId), {
-          ...payload,
-          updatedAt: new Date().toISOString(),
-        });
-        setMessage({ type: 'success', text: 'Evento atualizado com sucesso!' });
-      } else {
-        await addDoc(collection(db, 'eventos'), {
-          ...payload,
-          addedAt: new Date().toISOString(),
-        });
-        setMessage({ type: 'success', text: 'Evento criado com sucesso!' });
-      }
-
-      setEditingEventId(null);
-      setFormData({ name: '', type: '', start: '', end: '', neighborhood: '', region: '', year: '' });
+      setMessage({ type: 'success', text: 'Evento criado com sucesso!' });
+      setFormData(EMPTY_FORM_DATA);
       loadEvents();
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
       setMessage({ type: 'error', text: `Erro ao salvar evento: ${error instanceof Error ? error.message : 'Erro desconhecido'}` });
+    }
+  };
+
+  const handleUpdateEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!editingEventId) return;
+
+    if (!editFormData.name || !editFormData.type || !editFormData.start || !editFormData.end) {
+      setMessage({ type: 'error', text: 'Preencha todos os campos obrigatÃ³rios da ediÃ§Ã£o' });
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, 'eventos', editingEventId), {
+        name: editFormData.name,
+        venue: 'A definir',
+        type: editFormData.type,
+        start: parseInputDate(editFormData.start),
+        end: parseInputDate(editFormData.end),
+        neighborhood: editFormData.neighborhood || 'A definir',
+        region: editFormData.region || 'A definir',
+        year: editFormData.year || parseInputDate(editFormData.start).getFullYear().toString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      setMessage({ type: 'success', text: 'Evento atualizado com sucesso!' });
+      setEditingEventId(null);
+      setEditFormData(EMPTY_FORM_DATA);
+      setIsEditModalOpen(false);
+      loadEvents();
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error) {
+      setMessage({ type: 'error', text: `Erro ao atualizar evento: ${error instanceof Error ? error.message : 'Erro desconhecido'}` });
     }
   };
   
@@ -357,9 +412,7 @@ export default function AdminPanel() {
               )}
 
               <div className="mb-8">
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                  {editingEventId ? 'Editar Evento' : 'Adicionar Novo Evento'}
-                </h2>
+                <h2 className="text-xl font-semibold text-gray-800 mb-4">Adicionar Novo Evento</h2>
                 <form onSubmit={handleCreateEvent} className="space-y-4 bg-gray-50 p-6 rounded-lg border border-gray-200">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <input type="text" name="name" value={formData.name} onChange={handleInputChange} placeholder="Nome do Evento *" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -386,25 +439,76 @@ export default function AdminPanel() {
                     className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
                     <Plus size={20} />
-                    {editingEventId ? 'Atualizar Evento' : 'Adicionar Evento'}
+                    Adicionar Evento
                   </button>
-                  {editingEventId && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingEventId(null);
-                        setFormData({ name: '', type: '', start: '', end: '', neighborhood: '', region: '', year: '' });
-                      }}
-                      className="w-full md:w-auto ml-0 md:ml-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-6 rounded-lg transition-colors"
-                    >
-                      Cancelar edição
-                    </button>
-                  )}
                 </form>
               </div>
 
               <h2 className="text-xl font-semibold text-gray-800 mb-4">Lista de Eventos</h2>
               <EventList events={events} onDelete={handleDeleteEvent} onEdit={handleEditEvent} />
+
+              {isEditModalOpen && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+                  <div className="bg-white w-full max-w-3xl rounded-xl shadow-xl border border-gray-200">
+                    <div className="flex items-center justify-between p-4 border-b border-gray-200">
+                      <h3 className="text-lg font-semibold text-gray-800">Editar Evento</h3>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditModalOpen(false);
+                          setEditingEventId(null);
+                          setEditFormData(EMPTY_FORM_DATA);
+                        }}
+                        className="text-gray-500 hover:text-gray-800"
+                        aria-label="Fechar modal"
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
+                    <form onSubmit={handleUpdateEvent} className="p-6 space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <input type="text" name="name" value={editFormData.name} onChange={handleEditInputChange} placeholder="Nome do Evento *" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        <select name="type" value={editFormData.type} onChange={handleEditInputChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <option value="">Selecione o Tipo *</option>
+                          <option value="Show">Show</option>
+                          <option value="Festival">Festival</option>
+                          <option value="Congresso">Congresso</option>
+                          <option value="Conferência">Conferência</option>
+                          <option value="Exposição">Exposição</option>
+                          <option value="Evento">Evento</option>
+                          <option value="Esporte">Esporte</option>
+                          <option value="Carnaval">Carnaval</option>
+                          <option value="Feira">Feira</option>
+                        </select>
+                        <input type="date" name="start" value={editFormData.start} onChange={handleEditInputChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        <input type="date" name="end" value={editFormData.end} onChange={handleEditInputChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        <input type="text" name="neighborhood" value={editFormData.neighborhood} onChange={handleEditInputChange} placeholder="Bairro" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        <input type="text" name="region" value={editFormData.region} onChange={handleEditInputChange} placeholder="Região" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        <input type="text" name="year" value={editFormData.year} onChange={handleEditInputChange} placeholder="Ano" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      </div>
+                      <div className="flex items-center justify-end gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsEditModalOpen(false);
+                            setEditingEventId(null);
+                            setEditFormData(EMPTY_FORM_DATA);
+                          }}
+                          className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-5 rounded-lg transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-5 rounded-lg transition-colors"
+                        >
+                          Salvar alterações
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
 
               <div className="mt-6 pt-6 border-t border-gray-200 space-y-3">
                 <button
