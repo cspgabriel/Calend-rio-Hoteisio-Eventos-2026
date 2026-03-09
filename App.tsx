@@ -12,6 +12,7 @@ import UpcomingEvents from './components/UpcomingEvents';
 import RecentAdditionsView from './components/RecentAdditionsView';
 import TourismFairsView from './components/TourismFairsView';
 import { calculateDemandLevel, normalizeString } from './utils';
+import { fetchEvents, fetchTourismFairs } from './services/eventsService';
 import { 
   Search, LayoutDashboard, List, Calendar as CalendarIcon, 
   Map as MapIcon, TrendingUp, Menu, X, Filter, Download, 
@@ -37,6 +38,11 @@ const NAV_ITEMS = [
 
 export default function App() {
   const [activeView, setActiveView] = useState<ViewType>('list');
+
+  const [events, setEvents] = useState<EventData[]>(EVENTS);
+  const [tourismFairs, setTourismFairs] = useState<EventData[]>(TOURISM_FAIRS);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
   
   const isEmbed = useMemo(() => {
     if (typeof window !== 'undefined') {
@@ -77,20 +83,48 @@ export default function App() {
     setSelectedYear('Todos os Anos');
   };
 
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const [remoteEvents, remoteFairs] = await Promise.all([
+          fetchEvents(),
+          fetchTourismFairs()
+        ]);
+
+        if (remoteEvents.length > 0) {
+          setEvents(remoteEvents);
+        }
+
+        if (remoteFairs.length > 0) {
+          setTourismFairs(remoteFairs);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar dados do Firebase', err);
+        setError('Não foi possível carregar os dados em tempo real. Exibindo base local.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
   const filterOptions = useMemo(() => {
-    const regions = Array.from(new Set(EVENTS.map(e => e.region))).sort();
-    const neighborhoods = Array.from(new Set(EVENTS.map(e => e.neighborhood))).sort();
-    const venues = Array.from(new Set(EVENTS.map(e => e.venue))).sort();
-    const types = Array.from(new Set(EVENTS.map(e => e.type))).sort();
-    const years = Array.from(new Set(EVENTS.map(e => e.year))).sort();
+    const regions = Array.from(new Set(events.map(e => e.region))).sort();
+    const neighborhoods = Array.from(new Set(events.map(e => e.neighborhood))).sort();
+    const venues = Array.from(new Set(events.map(e => e.venue))).sort();
+    const types = Array.from(new Set(events.map(e => e.type))).sort();
+    const years = Array.from(new Set(events.map(e => e.year))).sort();
     const months = MONTH_ORDER;
     return { regions, neighborhoods, venues, types, months, years };
-  }, []);
+  }, [events]);
 
   const filteredEvents = useMemo(() => {
     const normalizedSearch = normalizeString(searchTerm);
 
-    return EVENTS.filter(event => {
+    return events.filter(event => {
       const matchesSearch = searchTerm === '' ||
         normalizeString(event.name).includes(normalizedSearch) ||
         normalizeString(event.venue).includes(normalizedSearch) ||
@@ -105,7 +139,7 @@ export default function App() {
 
       return matchesSearch && matchesRegion && matchesNeighborhood && matchesVenue && matchesType && matchesMonth && matchesYear;
     });
-  }, [searchTerm, selectedRegion, selectedNeighborhood, selectedVenue, selectedType, selectedMonth, selectedYear]);
+  }, [events, searchTerm, selectedRegion, selectedNeighborhood, selectedVenue, selectedType, selectedMonth, selectedYear]);
 
   const stats = useMemo(() => {
     const total = filteredEvents.length;
@@ -327,8 +361,8 @@ export default function App() {
                     {activeView === 'location' && <LocationView events={filteredEvents} />}
                     {activeView === 'high-demand' && <HighDemandView events={filteredEvents} />}
                     {activeView === 'list' && <EventList events={filteredEvents} />}
-                    {activeView === 'recent-additions' && <RecentAdditionsView events={EVENTS} />}
-                    {activeView === 'tourism-fairs' && <TourismFairsView events={TOURISM_FAIRS} />}
+                    {activeView === 'recent-additions' && <RecentAdditionsView events={events} />}
+                    {activeView === 'tourism-fairs' && <TourismFairsView events={tourismFairs} />}
                 </div>
               </div>
           </main>

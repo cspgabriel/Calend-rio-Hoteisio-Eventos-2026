@@ -277,7 +277,9 @@ export const EVENTS: EventData[] = RAW_EVENTS_DATA.map((event, index) => {
   };
 });
 
-// Base atualizada conforme as imagens fornecidas (Março a Maio 2026 + Preservados)
+// Base estática utilizada como referência e fallback local.
+// A fonte oficial de dados em produção é o Firebase Realtime Database
+// (nós `events/` e `tourismFairs/`).
 const RAW_TOURISM_FAIRS_DATA = [
   // --- JANEIRO ---
   { name: "FITUR Madrid", venue: "IFEMA", start: "21/01/2026", end: "26/01/2026", country: "Espanha", city: "Madri", region: "Internacional", year: "2026", addedAt: "15/03/2025" },
