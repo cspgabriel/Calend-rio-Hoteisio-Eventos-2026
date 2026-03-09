@@ -17,7 +17,7 @@ import {
   Map as MapIcon, TrendingUp, Menu, X, Filter, Download, 
   ChevronLeft, RotateCcw, Sparkles, Plane, Plus
 } from 'lucide-react';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from './firebase';
 
 type ViewType = 'dashboard' | 'list' | 'calendar' | 'location' | 'high-demand' | 'recent-additions' | 'tourism-fairs';
@@ -39,6 +39,8 @@ const NAV_ITEMS = [
 
 export default function App() {
   const [activeView, setActiveView] = useState<ViewType>('list');
+  
+  const [events, setEvents] = useState<EventData[]>([]);
   
   const isEmbed = useMemo(() => {
     if (typeof window !== 'undefined') {
@@ -72,6 +74,26 @@ export default function App() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newEvent, setNewEvent] = useState({ name: '', venue: '', type: '', start: '', end: '', neighborhood: '', region: '' });
 
+  const loadEvents = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'events'));
+      const eventsData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        startDate: doc.data().start,
+        endDate: doc.data().end,
+        inclusionDate: doc.data().addedAt
+      } as EventData));
+      setEvents(eventsData);
+    } catch (error) {
+      console.error('Erro ao carregar eventos:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadEvents();
+  }, []);
+
   const clearFilters = () => {
     setSearchTerm('');
     setSelectedRegion('Todas as Regiões');
@@ -82,18 +104,12 @@ export default function App() {
     setSelectedYear('Todos os Anos');
   };
 
-  const handleCreateEvent = async () => {
+  const handleDeleteEvent = async (id: string) => {
     try {
-      await addDoc(collection(db, 'events'), {
-        ...newEvent,
-        year: new Date(newEvent.start).getFullYear().toString(),
-        addedAt: new Date().toISOString()
-      });
-      alert('Evento criado com sucesso!');
-      setShowCreateForm(false);
-      setNewEvent({ name: '', venue: '', type: '', start: '', end: '', neighborhood: '', region: '' });
+      await deleteDoc(doc(db, 'events', id));
+      loadEvents();
     } catch (error) {
-      alert('Erro ao criar evento: ' + error.message);
+      alert('Erro ao excluir evento: ' + error.message);
     }
   };
 
@@ -110,7 +126,7 @@ export default function App() {
   const filteredEvents = useMemo(() => {
     const normalizedSearch = normalizeString(searchTerm);
 
-    return EVENTS.filter(event => {
+    return events.concat(EVENTS).filter(event => {
       const matchesSearch = searchTerm === '' ||
         normalizeString(event.name).includes(normalizedSearch) ||
         normalizeString(event.venue).includes(normalizedSearch) ||
@@ -125,7 +141,7 @@ export default function App() {
 
       return matchesSearch && matchesRegion && matchesNeighborhood && matchesVenue && matchesType && matchesMonth && matchesYear;
     });
-  }, [searchTerm, selectedRegion, selectedNeighborhood, selectedVenue, selectedType, selectedMonth, selectedYear]);
+  }, [searchTerm, selectedRegion, selectedNeighborhood, selectedVenue, selectedType, selectedMonth, selectedYear, events]);
 
   const stats = useMemo(() => {
     const total = filteredEvents.length;
@@ -372,7 +388,7 @@ export default function App() {
                     {activeView === 'calendar' && <CalendarView events={filteredEvents} />}
                     {activeView === 'location' && <LocationView events={filteredEvents} />}
                     {activeView === 'high-demand' && <HighDemandView events={filteredEvents} />}
-                    {activeView === 'list' && <EventList events={filteredEvents} />}
+                    {activeView === 'list' && <EventList events={filteredEvents} onDelete={handleDeleteEvent} />}
                     {activeView === 'recent-additions' && <RecentAdditionsView events={EVENTS} />}
                     {activeView === 'tourism-fairs' && <TourismFairsView events={TOURISM_FAIRS} />}
                 </div>

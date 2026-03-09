@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { EventData } from '../types';
 import { normalizeString, formatInclusionDate } from '../utils';
-import { MapPin, Calendar, Building2, ArrowUpDown, ArrowUp, ArrowDown, Search, Clock } from 'lucide-react';
+import { MapPin, Calendar, Building2, ArrowUpDown, ArrowUp, ArrowDown, Search, Clock, Trash2 } from 'lucide-react';
 
 interface EventListProps {
   events: EventData[];
+  onDelete?: (id: string) => void;
 }
 
 type SortConfig = {
@@ -12,7 +13,7 @@ type SortConfig = {
   direction: 'asc' | 'desc';
 } | null;
 
-const EventList: React.FC<EventListProps> = ({ events }) => {
+const EventList: React.FC<EventListProps> = ({ events, onDelete }) => {
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [filters, setFilters] = useState({
     name: '',
@@ -128,6 +129,7 @@ const EventList: React.FC<EventListProps> = ({ events }) => {
                     <input type="text" placeholder="Data..." className="w-full text-xs p-1.5 border rounded font-normal outline-none" value={filters.inclusion} onChange={(e) => setFilters({...filters, inclusion: e.target.value})} />
                 </div>
               </th>
+              {onDelete && <th className="px-6 py-4 min-w-[80px]">Ações</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -163,11 +165,21 @@ const EventList: React.FC<EventListProps> = ({ events }) => {
                       {formatInclusionDate(event.inclusionDate)}
                     </div>
                   </td>
+                  {onDelete && (
+                    <td className="px-6 py-4">
+                      <button 
+                        onClick={() => { if (window.confirm('Tem certeza que deseja excluir este evento?')) onDelete(event.id); }} 
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
             ))}
             {processedEvents.length === 0 && (
                 <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                    <td colSpan={onDelete ? 6 : 5} className="px-6 py-8 text-center text-slate-500">
                         Nenhum evento encontrado.
                     </td>
                 </tr>
