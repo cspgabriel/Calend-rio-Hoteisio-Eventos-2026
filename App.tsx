@@ -158,6 +158,10 @@ export default function App() {
     try {
       const batch = [];
       for (const event of EVENTS) {
+        if (!event.start || event.start === "A definir" || !event.end || event.end === "A definir") {
+          console.log('Pulando evento inválido:', event.name);
+          continue;
+        }
         batch.push(addDoc(collection(db, 'eventos'), {
           name: event.name,
           venue: event.venue,
@@ -171,7 +175,7 @@ export default function App() {
         }));
       }
       await Promise.all(batch);
-      alert('Eventos importados com sucesso!');
+      alert(`Eventos importados com sucesso! ${batch.length} eventos válidos.`);
       loadEvents();
     } catch (error) {
       alert('Erro ao importar: ' + error.message);
