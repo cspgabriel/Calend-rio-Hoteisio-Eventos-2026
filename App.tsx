@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { EVENTS, TOURISM_FAIRS } from './constants';
 import { EventData } from './types';
 import StatsCards from './components/StatsCards';
@@ -16,7 +16,7 @@ import { calculateDemandLevel, normalizeString } from './utils';
 import { 
   Search, LayoutDashboard, List, Calendar as CalendarIcon, 
   Map as MapIcon, TrendingUp, Menu, X, Filter, Download, 
-  ChevronLeft, RotateCcw, Sparkles, Plane, Settings
+  ChevronLeft, RotateCcw, Sparkles, Plane, Settings, ChevronDown
 } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
@@ -181,8 +181,9 @@ export default function App() {
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedRegion, setSelectedRegion] = useState('Todas as Regiões');
-  const [selectedNeighborhood, setSelectedNeighborhood] = useState('Todos os Bairros');
+  const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>([]);
+  const [neighborhoodDropdownOpen, setNeighborhoodDropdownOpen] = useState(false);
+  const neighborhoodRef = useRef<HTMLDivElement>(null);
   const [selectedVenue, setSelectedVenue] = useState('Todos os Locais');
   const [selectedType, setSelectedType] = useState('Todos os Tipos');
   const [selectedMonth, setSelectedMonth] = useState('Todos os Meses');
@@ -234,13 +235,28 @@ export default function App() {
 
   const clearFilters = () => {
     setSearchTerm('');
-    setSelectedRegion('Todas as Regiões');
-    setSelectedNeighborhood('Todos os Bairros');
+    setSelectedNeighborhoods([]);
     setSelectedVenue('Todos os Locais');
     setSelectedType('Todos os Tipos');
     setSelectedMonth('Todos os Meses');
     setSelectedYear('Todos os Anos');
   };
+
+  const toggleNeighborhood = (n: string) => {
+    setSelectedNeighborhoods(prev =>
+      prev.includes(n) ? prev.filter(x => x !== n) : [...prev, n]
+    );
+  };
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (neighborhoodRef.current && !neighborhoodRef.current.contains(e.target as Node)) {
+        setNeighborhoodDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   
 
@@ -248,13 +264,12 @@ export default function App() {
 
   const filterOptions = useMemo(() => {
     const uniqueEvents = dedupeEventsByInclusion(events.concat(EVENTS));
-    const regions = Array.from(new Set(uniqueEvents.map(e => e.region))).sort();
     const neighborhoods = Array.from(new Set(uniqueEvents.map(e => e.neighborhood))).sort();
     const venues = Array.from(new Set(uniqueEvents.map(e => e.venue))).sort();
     const types = Array.from(new Set(uniqueEvents.map(e => e.type))).sort();
     const years = Array.from(new Set(uniqueEvents.map(e => e.year))).sort();
     const months = MONTH_ORDER;
-    return { regions, neighborhoods, venues, types, months, years };
+    return { neighborhoods, venues, types, months, years };
   }, [events]);
 
   const filteredEvents = useMemo(() => {
@@ -267,16 +282,15 @@ export default function App() {
         normalizeString(event.venue).includes(normalizedSearch) ||
         normalizeString(event.type).includes(normalizedSearch);
       
-      const matchesRegion = selectedRegion === 'Todas as Regiões' || event.region === selectedRegion;
-      const matchesNeighborhood = selectedNeighborhood === 'Todos os Bairros' || event.neighborhood === selectedNeighborhood;
+      const matchesNeighborhood = selectedNeighborhoods.length === 0 || selectedNeighborhoods.includes(event.neighborhood);
       const matchesVenue = selectedVenue === 'Todos os Locais' || event.venue === selectedVenue;
       const matchesType = selectedType === 'Todos os Tipos' || event.type === selectedType;
       const matchesMonth = selectedMonth === 'Todos os Meses' || event.month === selectedMonth;
       const matchesYear = selectedYear === 'Todos os Anos' || event.year === selectedYear;
 
-      return matchesSearch && matchesRegion && matchesNeighborhood && matchesVenue && matchesType && matchesMonth && matchesYear;
+      return matchesSearch && matchesNeighborhood && matchesVenue && matchesType && matchesMonth && matchesYear;
     });
-  }, [searchTerm, selectedRegion, selectedNeighborhood, selectedVenue, selectedType, selectedMonth, selectedYear, events]);
+  }, [searchTerm, selectedNeighborhoods, selectedVenue, selectedType, selectedMonth, selectedYear, events]);
 
   const stats = useMemo(() => {
     const total = filteredEvents.length;
@@ -441,19 +455,38 @@ export default function App() {
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
                       <div className="flex items-center bg-slate-50 rounded-lg px-3 py-2 border border-slate-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200 transition-all xl:col-span-1">
                         <Search size={18} className="text-slate-400 mr-2" />
                         <input type="text" placeholder="Buscar..." className="bg-transparent border-none outline-none text-sm w-full placeholder-slate-400 text-slate-700" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                       </div>
-                      <select value={selectedRegion} onChange={(e) => setSelectedRegion(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
-                        <option>Todas as Regiões</option>
-                        {filterOptions.regions.map(r => <option key={r} value={r}>{r}</option>)}
-                      </select>
-                      <select value={selectedNeighborhood} onChange={(e) => setSelectedNeighborhood(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
-                        <option>Todos os Bairros</option>
-                        {filterOptions.neighborhoods.map(n => <option key={n} value={n}>{n}</option>)}
-                      </select>
+                      <div className="relative" ref={neighborhoodRef}>
+                        <button
+                          type="button"
+                          onClick={() => setNeighborhoodDropdownOpen(o => !o)}
+                          className="w-full bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 flex items-center justify-between gap-2 outline-none hover:border-slate-300"
+                        >
+                          <span className="truncate">
+                            {selectedNeighborhoods.length === 0 ? 'Todos os Bairros' : `${selectedNeighborhoods.length} bairro${selectedNeighborhoods.length > 1 ? 's' : ''}`}
+                          </span>
+                          <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform ${neighborhoodDropdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {neighborhoodDropdownOpen && (
+                          <div className="absolute z-50 mt-1 w-full min-w-[14rem] bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                            {filterOptions.neighborhoods.map(n => (
+                              <label key={n} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer text-sm text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedNeighborhoods.includes(n)}
+                                  onChange={() => toggleNeighborhood(n)}
+                                  className="rounded accent-blue-600"
+                                />
+                                {n}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <select value={selectedVenue} onChange={(e) => setSelectedVenue(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
                         <option>Todos os Locais</option>
                         {filterOptions.venues.map(v => <option key={v} value={v}>{v}</option>)}
