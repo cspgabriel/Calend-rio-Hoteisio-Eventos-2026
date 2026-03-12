@@ -112,6 +112,7 @@ const getRegion = (neighborhood: string): string => {
 
 const RAW_EVENTS_DATA = [
   // --- NOVAS INCLUSÕES ---
+  { name: "Bravo Tenores In Concert", venue: "Cidade das Artes", type: "Show & Festival", start: "28/03/2026", end: "28/03/2026", neighborhood: "Barra da Tijuca", point: "POINT (-43.3659 -22.9991)", year: "2026", addedAt: "12/03/2026" },
   { name: "Show Luan Santana", venue: "Parque Olímpico", type: "Show & Festival", start: "16/05/2026", end: "16/05/2026", neighborhood: "Barra da Tijuca", point: "POINT (-43.3935 -22.9739)", year: "2026", addedAt: "06/03/2026" },
   { name: "Blockchain Rio", venue: "ExpoRio", type: "Congresso & Conferência", start: "12/08/2026", end: "13/08/2026", neighborhood: "Cidade Nova", point: "POINT (-43.2096 -22.9126)", year: "2026", addedAt: "06/03/2026" },
   { name: "The Lumineers", venue: "Vivo Rio", type: "Show & Festival", start: "22/04/2026", end: "22/04/2026", neighborhood: "Centro", point: "POINT (-43.1725 -22.9142)", year: "2026", addedAt: "04/03/2026" },

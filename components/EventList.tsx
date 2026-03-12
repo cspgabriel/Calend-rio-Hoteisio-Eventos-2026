@@ -1,12 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { EventData } from '../types';
 import { normalizeString, formatInclusionDate } from '../utils';
-import { MapPin, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Search, Clock, Trash2, Pencil } from 'lucide-react';
+import { MapPin, Calendar, Building2, ArrowUpDown, ArrowUp, ArrowDown, Search, Clock } from 'lucide-react';
 
 interface EventListProps {
   events: EventData[];
-  onDelete?: (id: string) => void;
-  onEdit?: (event: EventData) => void;
 }
 
 type SortConfig = {
@@ -14,7 +12,7 @@ type SortConfig = {
   direction: 'asc' | 'desc';
 } | null;
 
-const EventList: React.FC<EventListProps> = ({ events, onDelete, onEdit }) => {
+const EventList: React.FC<EventListProps> = ({ events }) => {
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [filters, setFilters] = useState({
     name: '',
@@ -130,7 +128,6 @@ const EventList: React.FC<EventListProps> = ({ events, onDelete, onEdit }) => {
                     <input type="text" placeholder="Data..." className="w-full text-xs p-1.5 border rounded font-normal outline-none" value={filters.inclusion} onChange={(e) => setFilters({...filters, inclusion: e.target.value})} />
                 </div>
               </th>
-              {(onDelete || onEdit) && <th className="px-6 py-4 min-w-[120px]">Ações</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -163,38 +160,14 @@ const EventList: React.FC<EventListProps> = ({ events, onDelete, onEdit }) => {
                   <td className="px-6 py-4">
                     <div className="flex items-center text-xs text-slate-500">
                       <Clock size={12} className="mr-1 text-slate-300" />
-                      {event.inclusionDate}
+                      {formatInclusionDate(event.inclusionDate)}
                     </div>
                   </td>
-                  {(onDelete || onEdit) && (
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        {onEdit && (
-                          <button
-                            onClick={() => onEdit(event)}
-                            className="text-blue-500 hover:text-blue-700"
-                            title="Editar evento"
-                          >
-                            <Pencil size={16} />
-                          </button>
-                        )}
-                        {onDelete && (
-                          <button 
-                            onClick={() => { if (window.confirm('Tem certeza que deseja excluir este evento?')) onDelete(event.id); }} 
-                            className="text-red-500 hover:text-red-700"
-                            title="Excluir evento"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  )}
                 </tr>
             ))}
             {processedEvents.length === 0 && (
                 <tr>
-                    <td colSpan={(onDelete || onEdit) ? 6 : 5} className="px-6 py-8 text-center text-slate-500">
+                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
                         Nenhum evento encontrado.
                     </td>
                 </tr>

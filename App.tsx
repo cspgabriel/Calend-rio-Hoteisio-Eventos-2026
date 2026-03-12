@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { EVENTS, TOURISM_FAIRS } from './constants';
 import { EventData } from './types';
 import StatsCards from './components/StatsCards';
@@ -11,17 +11,14 @@ import HighDemandView from './components/HighDemandView';
 import UpcomingEvents from './components/UpcomingEvents';
 import RecentAdditionsView from './components/RecentAdditionsView';
 import TourismFairsView from './components/TourismFairsView';
-import AdminPanel from './components/AdminPanel';
 import { calculateDemandLevel, normalizeString } from './utils';
 import { 
   Search, LayoutDashboard, List, Calendar as CalendarIcon, 
   Map as MapIcon, TrendingUp, Menu, X, Filter, Download, 
-  ChevronLeft, RotateCcw, Sparkles, Plane, Settings, ChevronDown
+  ChevronLeft, RotateCcw, Sparkles, Plane 
 } from 'lucide-react';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from './firebase';
 
-type ViewType = 'dashboard' | 'list' | 'calendar' | 'location' | 'high-demand' | 'recent-additions' | 'tourism-fairs' | 'admin';
+type ViewType = 'dashboard' | 'list' | 'calendar' | 'location' | 'high-demand' | 'recent-additions' | 'tourism-fairs';
 
 const MONTH_ORDER = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -38,118 +35,8 @@ const NAV_ITEMS = [
   { id: 'high-demand', label: 'Mais Público', icon: TrendingUp },
 ];
 
-const parseInclusionDate = (value: string): Date | null => {
-  if (!value || value === 'N/A') return null;
-
-  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (match) {
-    const parsed = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
-const parsePtBrDate = (value: string): Date | null => {
-  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (!match) return null;
-  const parsed = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
-const formatPtBrDate = (date: Date): string => {
-  const d = `${date.getDate()}`.padStart(2, '0');
-  const m = `${date.getMonth() + 1}`.padStart(2, '0');
-  const y = date.getFullYear();
-  return `${d}/${m}/${y}`;
-};
-
-const addDays = (date: Date, days: number): Date => {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-};
-
-const dedupeEventsByInclusion = (list: EventData[]): EventData[] => {
-  const grouped = new Map<string, EventData[]>();
-  for (const event of list) {
-    const key = normalizeString(event.name).trim();
-    const bucket = grouped.get(key) || [];
-    bucket.push({
-      ...event,
-      parsedStartDate: new Date(event.parsedStartDate),
-      parsedEndDate: new Date(event.parsedEndDate),
-    });
-    grouped.set(key, bucket);
-  }
-
-  const merged: EventData[] = [];
-
-  for (const events of grouped.values()) {
-    const sorted = [...events].sort((a, b) => {
-      const aStart = parsePtBrDate(a.startDate) || a.parsedStartDate;
-      const bStart = parsePtBrDate(b.startDate) || b.parsedStartDate;
-      return aStart.getTime() - bStart.getTime();
-    });
-
-    const acc: EventData[] = [];
-
-    for (const next of sorted) {
-      const current = acc[acc.length - 1];
-      if (!current) {
-        acc.push(next);
-        continue;
-      }
-
-      const currentStart = parsePtBrDate(current.startDate) || current.parsedStartDate;
-      const currentEnd = parsePtBrDate(current.endDate) || current.parsedEndDate;
-      const nextStart = parsePtBrDate(next.startDate) || next.parsedStartDate;
-      const nextEnd = parsePtBrDate(next.endDate) || next.parsedEndDate;
-
-      const isSequentialOrOverlap = nextStart.getTime() <= addDays(currentEnd, 1).getTime();
-
-      if (!isSequentialOrOverlap) {
-        acc.push(next);
-        continue;
-      }
-
-      const mergedStart = currentStart.getTime() <= nextStart.getTime() ? currentStart : nextStart;
-      const mergedEnd = currentEnd.getTime() >= nextEnd.getTime() ? currentEnd : nextEnd;
-      current.parsedStartDate = mergedStart;
-      current.parsedEndDate = mergedEnd;
-      current.startDate = formatPtBrDate(mergedStart);
-      current.endDate = formatPtBrDate(mergedEnd);
-      current.month = mergedStart.toLocaleDateString('pt-BR', { month: 'long' });
-      current.year = `${mergedStart.getFullYear()}`;
-
-      const currentInc = parseInclusionDate(current.inclusionDate);
-      const nextInc = parseInclusionDate(next.inclusionDate);
-      if ((!currentInc && nextInc) || (currentInc && nextInc && nextInc.getTime() > currentInc.getTime())) {
-        current.inclusionDate = next.inclusionDate;
-      }
-
-      if ((!current.venue || current.venue === 'A definir') && next.venue && next.venue !== 'A definir') {
-        current.venue = next.venue;
-      }
-      if ((!current.neighborhood || current.neighborhood === 'A definir') && next.neighborhood && next.neighborhood !== 'A definir') {
-        current.neighborhood = next.neighborhood;
-      }
-      if ((!current.region || current.region === 'A definir') && next.region && next.region !== 'A definir') {
-        current.region = next.region;
-      }
-    }
-
-    merged.push(...acc);
-  }
-
-  return merged;
-};
-
 export default function App() {
   const [activeView, setActiveView] = useState<ViewType>('list');
-  
-  const [events, setEvents] = useState<EventData[]>([]);
   
   const isEmbed = useMemo(() => {
     if (typeof window !== 'undefined') {
@@ -157,14 +44,6 @@ export default function App() {
       return params.get('mode') === 'embed';
     }
     return false;
-  }, []);
-
-  const isAdminRoute = useMemo(() => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-    const normalizedPath = window.location.pathname.replace(/\/+$/, '');
-    return normalizedPath === '/admin' || normalizedPath.endsWith('/admin');
   }, []);
 
   useEffect(() => {
@@ -181,116 +60,52 @@ export default function App() {
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>([]);
-  const [neighborhoodDropdownOpen, setNeighborhoodDropdownOpen] = useState(false);
-  const neighborhoodRef = useRef<HTMLDivElement>(null);
+  const [selectedRegion, setSelectedRegion] = useState('Todas as Regiões');
+  const [selectedNeighborhood, setSelectedNeighborhood] = useState('Todos os Bairros');
   const [selectedVenue, setSelectedVenue] = useState('Todos os Locais');
   const [selectedType, setSelectedType] = useState('Todos os Tipos');
   const [selectedMonth, setSelectedMonth] = useState('Todos os Meses');
   const [selectedYear, setSelectedYear] = useState('Todos os Anos');
 
-  const loadEvents = async () => {
-    try {
-      const querySnapshot = await getDocs(collection(db, 'eventos'));
-      const eventsData = querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        const startDate = data.start.toDate ? data.start.toDate() : new Date(data.start);
-        const endDate = data.end.toDate ? data.end.toDate() : new Date(data.end);
-        const addedAtRaw = data.addedAt;
-        const addedAtDate =
-          addedAtRaw?.toDate
-            ? addedAtRaw.toDate()
-            : parseInclusionDate(String(addedAtRaw || ''));
-        
-        return {
-          id: doc.id,
-          name: data.name,
-          venue: data.venue,
-          type: data.type,
-          startDate: startDate.toLocaleDateString('pt-BR'),
-          endDate: endDate.toLocaleDateString('pt-BR'),
-          month: startDate.toLocaleDateString('pt-BR', { month: 'long' }),
-          neighborhood: data.neighborhood,
-          region: data.region,
-          year: startDate.getFullYear().toString(),
-          lat: 0, // Placeholder
-          lng: 0, // Placeholder
-          parsedStartDate: startDate,
-          parsedEndDate: endDate,
-          inclusionDate: addedAtDate ? addedAtDate.toLocaleDateString('pt-BR') : 'N/A',
-          city: 'Rio de Janeiro',
-          state: 'RJ',
-          country: 'Brasil'
-        } as EventData;
-      });
-      setEvents(eventsData);
-    } catch (error) {
-      console.error('Erro ao carregar eventos:', error);
-    }
-  };
-
-  useEffect(() => {
-    loadEvents();
-  }, []);
-
   const clearFilters = () => {
     setSearchTerm('');
-    setSelectedNeighborhoods([]);
+    setSelectedRegion('Todas as Regiões');
+    setSelectedNeighborhood('Todos os Bairros');
     setSelectedVenue('Todos os Locais');
     setSelectedType('Todos os Tipos');
     setSelectedMonth('Todos os Meses');
     setSelectedYear('Todos os Anos');
   };
 
-  const toggleNeighborhood = (n: string) => {
-    setSelectedNeighborhoods(prev =>
-      prev.includes(n) ? prev.filter(x => x !== n) : [...prev, n]
-    );
-  };
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (neighborhoodRef.current && !neighborhoodRef.current.contains(e.target as Node)) {
-        setNeighborhoodDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  
-
-
-
   const filterOptions = useMemo(() => {
-    const uniqueEvents = dedupeEventsByInclusion(events.concat(EVENTS));
-    const neighborhoods = Array.from(new Set(uniqueEvents.map(e => e.neighborhood))).sort();
-    const venues = Array.from(new Set(uniqueEvents.map(e => e.venue))).sort();
-    const types = Array.from(new Set(uniqueEvents.map(e => e.type))).sort();
-    const years = Array.from(new Set(uniqueEvents.map(e => e.year))).sort();
+    const regions = Array.from(new Set(EVENTS.map(e => e.region))).sort();
+    const neighborhoods = Array.from(new Set(EVENTS.map(e => e.neighborhood))).sort();
+    const venues = Array.from(new Set(EVENTS.map(e => e.venue))).sort();
+    const types = Array.from(new Set(EVENTS.map(e => e.type))).sort();
+    const years = Array.from(new Set(EVENTS.map(e => e.year))).sort();
     const months = MONTH_ORDER;
-    return { neighborhoods, venues, types, months, years };
-  }, [events]);
+    return { regions, neighborhoods, venues, types, months, years };
+  }, []);
 
   const filteredEvents = useMemo(() => {
     const normalizedSearch = normalizeString(searchTerm);
-    const uniqueEvents = dedupeEventsByInclusion(events.concat(EVENTS));
 
-    return uniqueEvents.filter(event => {
+    return EVENTS.filter(event => {
       const matchesSearch = searchTerm === '' ||
         normalizeString(event.name).includes(normalizedSearch) ||
         normalizeString(event.venue).includes(normalizedSearch) ||
         normalizeString(event.type).includes(normalizedSearch);
       
-      const matchesNeighborhood = selectedNeighborhoods.length === 0 || selectedNeighborhoods.includes(event.neighborhood);
+      const matchesRegion = selectedRegion === 'Todas as Regiões' || event.region === selectedRegion;
+      const matchesNeighborhood = selectedNeighborhood === 'Todos os Bairros' || event.neighborhood === selectedNeighborhood;
       const matchesVenue = selectedVenue === 'Todos os Locais' || event.venue === selectedVenue;
       const matchesType = selectedType === 'Todos os Tipos' || event.type === selectedType;
       const matchesMonth = selectedMonth === 'Todos os Meses' || event.month === selectedMonth;
       const matchesYear = selectedYear === 'Todos os Anos' || event.year === selectedYear;
 
-      return matchesSearch && matchesNeighborhood && matchesVenue && matchesType && matchesMonth && matchesYear;
+      return matchesSearch && matchesRegion && matchesNeighborhood && matchesVenue && matchesType && matchesMonth && matchesYear;
     });
-  }, [searchTerm, selectedNeighborhoods, selectedVenue, selectedType, selectedMonth, selectedYear, events]);
+  }, [searchTerm, selectedRegion, selectedNeighborhood, selectedVenue, selectedType, selectedMonth, selectedYear]);
 
   const stats = useMemo(() => {
     const total = filteredEvents.length;
@@ -355,11 +170,7 @@ export default function App() {
   };
 
   return (
-    <>
-      {isAdminRoute ? (
-        <AdminPanel />
-      ) : (
-        <div className={`min-h-screen bg-slate-50 flex ${isEmbed ? 'flex-col' : 'flex-row'}`}>
+    <div className={`min-h-screen bg-slate-50 flex ${isEmbed ? 'flex-col' : 'flex-row'}`}>
       
       {isMobileSidebarOpen && (
           <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" onClick={toggleMobileSidebar}></div>
@@ -455,38 +266,19 @@ export default function App() {
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-4">
                       <div className="flex items-center bg-slate-50 rounded-lg px-3 py-2 border border-slate-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200 transition-all xl:col-span-1">
                         <Search size={18} className="text-slate-400 mr-2" />
                         <input type="text" placeholder="Buscar..." className="bg-transparent border-none outline-none text-sm w-full placeholder-slate-400 text-slate-700" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                       </div>
-                      <div className="relative" ref={neighborhoodRef}>
-                        <button
-                          type="button"
-                          onClick={() => setNeighborhoodDropdownOpen(o => !o)}
-                          className="w-full bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 flex items-center justify-between gap-2 outline-none hover:border-slate-300"
-                        >
-                          <span className="truncate">
-                            {selectedNeighborhoods.length === 0 ? 'Todos os Bairros' : `${selectedNeighborhoods.length} bairro${selectedNeighborhoods.length > 1 ? 's' : ''}`}
-                          </span>
-                          <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform ${neighborhoodDropdownOpen ? 'rotate-180' : ''}`} />
-                        </button>
-                        {neighborhoodDropdownOpen && (
-                          <div className="absolute z-50 mt-1 w-full min-w-[14rem] bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                            {filterOptions.neighborhoods.map(n => (
-                              <label key={n} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer text-sm text-slate-700">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedNeighborhoods.includes(n)}
-                                  onChange={() => toggleNeighborhood(n)}
-                                  className="rounded accent-blue-600"
-                                />
-                                {n}
-                              </label>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <select value={selectedRegion} onChange={(e) => setSelectedRegion(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
+                        <option>Todas as Regiões</option>
+                        {filterOptions.regions.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                      <select value={selectedNeighborhood} onChange={(e) => setSelectedNeighborhood(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
+                        <option>Todos os Bairros</option>
+                        {filterOptions.neighborhoods.map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
                       <select value={selectedVenue} onChange={(e) => setSelectedVenue(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
                         <option>Todos os Locais</option>
                         {filterOptions.venues.map(v => <option key={v} value={v}>{v}</option>)}
@@ -540,9 +332,7 @@ export default function App() {
                 </div>
               </div>
           </main>
-        </div>
       </div>
-      )}
-    </>
+    </div>
   );
 }
