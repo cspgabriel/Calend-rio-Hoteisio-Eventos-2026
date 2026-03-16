@@ -237,7 +237,7 @@ const RAW_EVENTS_DATA = [
   { name: "Int Conf Software Engineering", venue: "Windsor Oceânico", type: "Conferência", start: "12/04/2026", end: "19/04/2026", neighborhood: "Barra da Tijuca", point: "POINT (-43.3222 -23.0106)", year: "2026", addedAt: "15/03/2025" },
   { name: "SailGP", venue: "Marina da Glória", type: "Esportivo", start: "11/04/2026", end: "12/04/2026", neighborhood: "Glória", point: "POINT (-43.1701 -22.9199)", year: "2026", addedAt: "15/03/2025" },
   { name: "Imagineland 2026", venue: "Riocentro", type: "Festival", start: "10/04/2026", end: "12/04/2026", neighborhood: "Barra da Tijuca", point: "POINT (-43.4028 -22.9731)", year: "2026", addedAt: "15/03/2025" },
-  { name: "SAHIC Latin America", venue: "A definir", type: "Congresso", start: "22/03/2026", end: "24/03/2026", neighborhood: "A definir", point: "", year: "2026", addedAt: "15/03/2025" },
+  { name: "SAHIC Latin America", venue: "Fairmont Copacabana", type: "Congresso", start: "22/03/2026", end: "24/03/2026", neighborhood: "Copacabana", point: "POINT (-43.1888 -22.986)", year: "2026", addedAt: "15/03/2025" },
   { name: "22nd Cong Ocular Oncology", venue: "Sheraton Grand Rio", type: "Congresso", start: "17/03/2026", end: "21/03/2026", neighborhood: "Leblon", point: "POINT (-43.2335 -22.9924)", year: "2026", addedAt: "15/03/2025" },
   { name: "SRE TRADE SHOW", venue: "Riocentro", type: "Feira", start: "17/03/2026", end: "19/03/2026", neighborhood: "Barra Olímpica", point: "POINT (-43.4028 -22.9731)", year: "2026", addedAt: "15/03/2025" },
   { name: "Alceu Valença – “80 girassóis”", venue: "Farmasi Arena", type: "Show", start: "14/03/2026", end: "14/03/2026", neighborhood: "Barra Olímpica", point: "POINT (-43.3922 -22.973)", year: "2026", addedAt: "15/03/2025" },
