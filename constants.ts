@@ -112,6 +112,7 @@ const getRegion = (neighborhood: string): string => {
 
 const RAW_EVENTS_DATA = [
   // --- NOVAS INCLUSÕES ---
+  { name: "Partnership for Health Cities Summit", venue: "Fairmont Rio de Janeiro Copacabana", type: "Congresso", start: "30/03/2026", end: "02/04/2026", neighborhood: "Copacabana", point: "POINT (-43.1888 -22.986)", year: "2026", addedAt: "18/03/2026" },
   { name: "Hyrox 2026", venue: "Riocentro", type: "Esporte", start: "27/11/2026", end: "27/11/2026", neighborhood: "Barra Olímpica", point: "POINT (-43.3966 -22.9666)", year: "2026", addedAt: "16/03/2026" },
   { name: "NUTRIS DA CASA", venue: "Riocentro", type: "Congresso", start: "15/08/2026", end: "15/08/2026", neighborhood: "Barra Olímpica", point: "POINT (-43.3966 -22.9666)", year: "2026", addedAt: "16/03/2026" },
   { name: "DroneArt Show", venue: "Riocentro", type: "Feira", start: "10/04/2026", end: "12/04/2026", neighborhood: "Barra Olímpica", point: "POINT (-43.3966 -22.9666)", year: "2026", addedAt: "16/03/2026" },
@@ -312,6 +313,7 @@ const RAW_TOURISM_FAIRS_DATA = [
   { name: "FETUR PIAUI", venue: "A definir", start: "19/03/2026", end: "20/03/2026", country: "Brasil", city: "Teresina", state: "PI", region: "Nacional", year: "2026", addedAt: "03/06/2025" },
   { name: "EXPOTEL", venue: "A definir", start: "25/03/2026", end: "26/03/2026", country: "Brasil", city: "São Paulo", state: "SP", region: "Nacional", year: "2026", addedAt: "03/06/2025" },
   { name: "VISIT BRASIL SUMMIT", venue: "A definir", start: "30/03/2026", end: "31/03/2026", country: "Brasil", city: "Brasília", state: "DF", region: "Nacional", year: "2026", addedAt: "03/06/2025" },
+  { name: "ExpoRIO Turismo 2026", venue: "Complexo Lagoon", start: "26/03/2026", end: "29/03/2026", country: "Brasil", city: "Rio de Janeiro", state: "RJ", region: "Nacional", year: "2026", addedAt: "16/03/2026" },
   { name: "PESCA TRADE SHOW 2026", venue: "A definir", start: "12/03/2026", end: "14/03/2026", country: "Brasil", city: "São Paulo", state: "SP", region: "Nacional", year: "2026", addedAt: "15/03/2025" },
   { name: "CRUISE360 BRASIL 2026", venue: "A definir", start: "14/03/2026", end: "15/03/2026", country: "Brasil", city: "Santos", state: "SP", region: "Nacional", year: "2026", addedAt: "15/03/2025" },
   { name: "SAP CONCUR FUSION", venue: "A definir", start: "17/03/2026", end: "19/03/2026", country: "Estados Unidos", city: "New Orleans", region: "Internacional", year: "2026", addedAt: "15/03/2025" },
