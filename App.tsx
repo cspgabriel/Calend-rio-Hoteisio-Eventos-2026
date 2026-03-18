@@ -71,13 +71,6 @@ export default function App() {
   const [firestoreAvailable, setFirestoreAvailable] = useState<boolean | null>(null);
 
   const loadEvents = async () => {
-    if (!db) {
-      setFirestoreAvailable(false);
-      setEvents(EVENTS);
-      setLoadingEvents(false);
-      return;
-    }
-
     try {
       const querySnapshot = await getDocs(collection(db, 'eventos'));
       const firebaseEvents = querySnapshot.docs.map(doc => {
