@@ -1,0 +1,273 @@
+import React, { useState } from 'react';
+import { addDoc, collection, Timestamp } from 'firebase/firestore';
+import { db } from '../firebase';
+import { X, Plus } from 'lucide-react';
+
+const ADMIN_PASSWORD = 'admin123';
+
+type Props = {
+  onLogout?: () => void;
+};
+
+const EMPTY_EVENT_FORM = {
+  name: '',
+  venue: '',
+  type: '',
+  startDate: '',
+  endDate: '',
+  neighborhood: '',
+  year: '',
+};
+
+export default function AdminPanel({ onLogout }: Props) {
+  const [isLocked, setIsLocked] = useState(true);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(EMPTY_EVENT_FORM);
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const handleUnlock = () => {
+    if (password === ADMIN_PASSWORD) {
+      setIsLocked(false);
+      setError(null);
+    } else {
+      setError('Senha incorreta.');
+    }
+  };
+
+  const handleReset = () => {
+    setForm(EMPTY_EVENT_FORM);
+    setError(null);
+    setSuccess(null);
+  };
+
+  const handleCreate = async () => {
+    if (!db) {
+      setError('Firestore não está configurado. Verifique as variáveis de ambiente.');
+      return;
+    }
+
+    const required = ['name', 'venue', 'type', 'startDate', 'endDate', 'neighborhood', 'year'] as const;
+    for (const key of required) {
+      if (!form[key]) {
+        setError('Preencha todos os campos antes de criar.');
+        return;
+      }
+    }
+
+    setSubmitting(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const startParts = form.startDate.split('/');
+      const endParts = form.endDate.split('/');
+      const start = new Date(Number(startParts[2]), Number(startParts[1]) - 1, Number(startParts[0]));
+      const end = new Date(Number(endParts[2]), Number(endParts[1]) - 1, Number(endParts[0]));
+
+      await addDoc(collection(db, 'eventos'), {
+        name: form.name,
+        venue: form.venue,
+        type: form.type,
+        start: Timestamp.fromDate(start),
+        end: Timestamp.fromDate(end),
+        neighborhood: form.neighborhood,
+        region: 'A definir',
+        year: form.year,
+        addedAt: Timestamp.now(),
+      });
+
+      setSuccess('Evento criado com sucesso!');
+      handleReset();
+    } catch (err) {
+      console.error(err);
+      setError('Falha ao criar evento. Verifique as permissões do Firestore.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (isLocked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+        <div className="w-full max-w-md bg-white shadow rounded-xl border border-slate-200 p-6">
+          <h1 className="text-xl font-semibold text-slate-800 mb-4">Área Administrativa</h1>
+          <p className="text-sm text-slate-500 mb-4">Informe a senha para acessar as funcionalidades de edição.</p>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Senha"
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          />
+          {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+          <div className="flex items-center justify-between">
+            <button
+              onClick={handleUnlock}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              Entrar
+            </button>
+            <button
+              onClick={() => window.location.assign('/')}
+              className="px-4 py-2 text-slate-600 rounded-lg hover:bg-slate-100 transition"
+            >
+              Voltar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 p-6">
+      <div className="max-w-5xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-800">Painel Administrativo</h1>
+            <p className="text-sm text-slate-500">Aqui você pode adicionar novos eventos diretamente no banco.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setShowForm(s => !s);
+                setSuccess(null);
+                setError(null);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+            >
+              <Plus size={16} />
+              Criar novo evento
+            </button>
+            <button
+              onClick={() => {
+                setIsLocked(true);
+                setPassword('');
+                onLogout?.();
+              }}
+              className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition"
+            >
+              Sair
+            </button>
+          </div>
+        </div>
+
+        {showForm && (
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-800">Novo evento</h2>
+                <p className="text-sm text-slate-500">Preencha os campos abaixo e clique em criar.</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowForm(false);
+                  setSuccess(null);
+                  setError(null);
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Nome do Evento</label>
+                <input
+                  value={form.name}
+                  onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="Ex: Rock in Rio"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Local/Localização</label>
+                <input
+                  value={form.venue}
+                  onChange={(e) => setForm(prev => ({ ...prev, venue: e.target.value }))}
+                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="Ex: Parque Olímpico"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Tipo de Evento</label>
+                <input
+                  value={form.type}
+                  onChange={(e) => setForm(prev => ({ ...prev, type: e.target.value }))}
+                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="Ex: Show & Festival"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Bairro</label>
+                <input
+                  value={form.neighborhood}
+                  onChange={(e) => setForm(prev => ({ ...prev, neighborhood: e.target.value }))}
+                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="Ex: Barra Olímpica"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Data de Início (DD/MM/YYYY)</label>
+                <input
+                  value={form.startDate}
+                  onChange={(e) => setForm(prev => ({ ...prev, startDate: e.target.value }))}
+                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Data de Fim (DD/MM/YYYY)</label>
+                <input
+                  value={form.endDate}
+                  onChange={(e) => setForm(prev => ({ ...prev, endDate: e.target.value }))}
+                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Ano</label>
+                <input
+                  value={form.year}
+                  onChange={(e) => setForm(prev => ({ ...prev, year: e.target.value }))}
+                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="Ex: 2026"
+                />
+              </div>
+            </div>
+
+            {error && <p className="text-sm text-red-600 mt-4">{error}</p>}
+            {success && <p className="text-sm text-emerald-600 mt-4">{success}</p>}
+
+            <div className="mt-6 flex items-center gap-3">
+              <button
+                onClick={handleCreate}
+                disabled={submitting}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+              >
+                {submitting ? 'Salvando...' : 'Salvar evento'}
+              </button>
+              <button
+                onClick={handleReset}
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition"
+              >
+                Limpar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!showForm && (
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+            <h2 className="text-lg font-semibold text-slate-800 mb-3">Próximos passos</h2>
+            <p className="text-sm text-slate-500">
+              Use o botão "Criar novo evento" para adicionar novos eventos ao banco do Firebase. Eles serão exibidos automaticamente no calendário e nas listas assim que o app recarregar ou o Firestore sincronizar.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

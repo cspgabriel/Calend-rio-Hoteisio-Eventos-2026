@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { EVENTS, TOURISM_FAIRS } from './constants';
 import { EventData } from './types';
 import StatsCards from './components/StatsCards';
@@ -11,7 +11,10 @@ import HighDemandView from './components/HighDemandView';
 import UpcomingEvents from './components/UpcomingEvents';
 import RecentAdditionsView from './components/RecentAdditionsView';
 import TourismFairsView from './components/TourismFairsView';
+import AdminPanel from './components/AdminPanel';
 import { calculateDemandLevel, normalizeString } from './utils';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from './firebase';
 import { 
   Search, LayoutDashboard, List, Calendar as CalendarIcon, 
   Map as MapIcon, TrendingUp, Menu, X, Filter, Download, 
@@ -46,6 +49,12 @@ export default function App() {
     return false;
   }, []);
 
+  const isAdminRoute = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const normalizedPath = window.location.pathname.replace(/\/+$|\/+$/, '');
+    return normalizedPath === '/admin' || normalizedPath.endsWith('/admin');
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('view') === 'recent') {
@@ -57,6 +66,7 @@ export default function App() {
   
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(!isEmbed);
+  const [events, setEvents] = useState<EventData[]>(EVENTS);
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState('');
@@ -168,6 +178,10 @@ export default function App() {
     link.click();
     document.body.removeChild(link);
   };
+
+  if (isAdminRoute) {
+    return <AdminPanel onLogout={() => window.location.assign('/')} />;
+  }
 
   return (
     <div className={`min-h-screen bg-slate-50 flex ${isEmbed ? 'flex-col' : 'flex-row'}`}>

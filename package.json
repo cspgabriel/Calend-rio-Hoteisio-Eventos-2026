@@ -15,7 +15,8 @@
     "react": "^19.2.1",
     "vite": "^7.2.7",
     "@vitejs/plugin-react": "^5.1.2",
-    "html2canvas": "latest"
+    "html2canvas": "latest",
+    "firebase": "^10.12.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
