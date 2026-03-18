@@ -1,35 +1,19 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 
-// 🔐 Configure these values in your .env file (Vite uses VITE_ prefix)
-// Example .env:
-// VITE_FIREBASE_API_KEY=…
-// VITE_FIREBASE_AUTH_DOMAIN=…
-// VITE_FIREBASE_PROJECT_ID=…
-// VITE_FIREBASE_STORAGE_BUCKET=…
-// VITE_FIREBASE_MESSAGING_SENDER_ID=…
-// VITE_FIREBASE_APP_ID=…
-
+// Default config for the eventos-d16c9 project.
+// Values can be overridden at build time via VITE_FIREBASE_* environment variables.
+// Firebase client credentials are public by design; security is enforced by Firestore Rules.
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY            || 'AIzaSyCwYnp8E73Or7osEouOlioBaPSGlkN6Ytc',
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN        || 'eventos-d16c9.firebaseapp.com',
+  databaseURL:       import.meta.env.VITE_FIREBASE_DATABASE_URL       || 'https://eventos-d16c9.firebaseio.com',
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID         || 'eventos-d16c9',
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET     || 'eventos-d16c9.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '271681547398',
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID             || '1:271681547398:web:1806de7516daa7bf9b3507',
+  measurementId:     import.meta.env.VITE_FIREBASE_MEASUREMENT_ID     || 'G-2MMXC40XS4',
 };
 
-// Vite will inline env vars, so we can do a quick check
-const hasFirebaseConfig = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
-
-let db = null as ReturnType<typeof getFirestore> | null;
-
-if (hasFirebaseConfig) {
-  const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
-  db = getFirestore(app);
-} else {
-  // eslint-disable-next-line no-console
-  console.warn('Firebase is not configured. Create a .env file with VITE_FIREBASE_... variables to enable Firestore.');
-}
-
-export { db };
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
+export const db = getFirestore(app);
