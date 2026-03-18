@@ -2,10 +2,15 @@ import React, { useState } from 'react';
 import { addDoc, collection, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { X, Plus } from 'lucide-react';
+import EventList from './EventList';
+import { EventData } from '../types';
 
 const ADMIN_PASSWORD = 'admin123';
 
 type Props = {
+  events: EventData[];
+  loading: boolean;
+  firestoreAvailable: boolean | null;
   onLogout?: () => void;
 };
 
@@ -19,7 +24,7 @@ const EMPTY_EVENT_FORM = {
   year: '',
 };
 
-export default function AdminPanel({ onLogout }: Props) {
+export default function AdminPanel({ events, loading, firestoreAvailable, onLogout }: Props) {
   const [isLocked, setIsLocked] = useState(true);
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -155,6 +160,28 @@ export default function AdminPanel({ onLogout }: Props) {
           </div>
         </div>
 
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">Eventos no Firebase</h2>
+              <p className="text-sm text-slate-500">
+                Esta lista reflete o que está armazenado na collection <span className="font-semibold">eventos</span>.
+              </p>
+            </div>
+            <div className="text-sm text-slate-500">
+              {loading ? 'Carregando...' : `${events.length} evento${events.length === 1 ? '' : 's'}`}
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="mt-4 text-sm text-slate-500">Aguarde enquanto conectamos ao Firestore...</div>
+          ) : firestoreAvailable === false ? (
+            <div className="mt-4 text-sm text-red-600">Firestore não configurado. Verifique as variáveis de ambiente.</div>
+          ) : (
+            <div className="mt-4 text-sm text-slate-500">Os eventos exibidos abaixo são provenientes do mesmo backend que alimenta o portal.</div>
+          )}
+        </div>
+
         {showForm && (
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
             <div className="flex items-start justify-between">
@@ -259,14 +286,10 @@ export default function AdminPanel({ onLogout }: Props) {
           </div>
         )}
 
-        {!showForm && (
-          <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-slate-800 mb-3">Próximos passos</h2>
-            <p className="text-sm text-slate-500">
-              Use o botão "Criar novo evento" para adicionar novos eventos ao banco do Firebase. Eles serão exibidos automaticamente no calendário e nas listas assim que o app recarregar ou o Firestore sincronizar.
-            </p>
-          </div>
-        )}
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+          <h2 className="text-lg font-semibold text-slate-800 mb-3">Lista de eventos</h2>
+          <EventList events={events} />
+        </div>
       </div>
     </div>
   );

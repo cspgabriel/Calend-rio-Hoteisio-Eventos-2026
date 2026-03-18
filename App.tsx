@@ -67,6 +67,77 @@ export default function App() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(!isEmbed);
   const [events, setEvents] = useState<EventData[]>(EVENTS);
+  const [loadingEvents, setLoadingEvents] = useState(true);
+  const [firestoreAvailable, setFirestoreAvailable] = useState<boolean | null>(null);
+
+  const loadEvents = async () => {
+    if (!db) {
+      setFirestoreAvailable(false);
+      setEvents(EVENTS);
+      setLoadingEvents(false);
+      return;
+    }
+
+    try {
+      const querySnapshot = await getDocs(collection(db, 'eventos'));
+      const firebaseEvents = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        const startDate = data.start?.toDate ? data.start.toDate() : new Date(data.start);
+        const endDate = data.end?.toDate ? data.end.toDate() : new Date(data.end);
+        const addedAtRaw = data.addedAt;
+        const addedAtDate =
+          addedAtRaw?.toDate
+            ? addedAtRaw.toDate()
+            : null;
+
+        return {
+          id: doc.id,
+          name: data.name,
+          venue: data.venue,
+          type: data.type,
+          startDate: startDate.toLocaleDateString('pt-BR'),
+          endDate: endDate.toLocaleDateString('pt-BR'),
+          month: startDate.toLocaleDateString('pt-BR', { month: 'long' }),
+          neighborhood: data.neighborhood,
+          region: data.region,
+          year: startDate.getFullYear().toString(),
+          lat: 0,
+          lng: 0,
+          parsedStartDate: startDate,
+          parsedEndDate: endDate,
+          inclusionDate: addedAtDate ? addedAtDate.toLocaleDateString('pt-BR') : 'N/A',
+          city: 'Rio de Janeiro',
+          state: 'RJ',
+          country: 'Brasil'
+        } as EventData;
+      });
+
+      // Merge static events with firestore events, preferring firestore when IDs match
+      const merged = [...EVENTS];
+      const existingIds = new Set(merged.map(e => e.id));
+      firebaseEvents.forEach(fe => {
+        if (existingIds.has(fe.id)) {
+          const idx = merged.findIndex(e => e.id === fe.id);
+          if (idx >= 0) merged[idx] = fe;
+        } else {
+          merged.push(fe);
+        }
+      });
+
+      setEvents(merged);
+      setFirestoreAvailable(true);
+    } catch (err) {
+      console.error('Erro ao carregar eventos do Firestore:', err);
+      setFirestoreAvailable(false);
+      setEvents(EVENTS);
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
+
+  useEffect(() => {
+    loadEvents();
+  }, []);
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState('');
@@ -88,19 +159,19 @@ export default function App() {
   };
 
   const filterOptions = useMemo(() => {
-    const regions = Array.from(new Set(EVENTS.map(e => e.region))).sort();
-    const neighborhoods = Array.from(new Set(EVENTS.map(e => e.neighborhood))).sort();
-    const venues = Array.from(new Set(EVENTS.map(e => e.venue))).sort();
-    const types = Array.from(new Set(EVENTS.map(e => e.type))).sort();
-    const years = Array.from(new Set(EVENTS.map(e => e.year))).sort();
+    const regions = Array.from(new Set(events.map(e => e.region))).sort();
+    const neighborhoods = Array.from(new Set(events.map(e => e.neighborhood))).sort();
+    const venues = Array.from(new Set(events.map(e => e.venue))).sort();
+    const types = Array.from(new Set(events.map(e => e.type))).sort();
+    const years = Array.from(new Set(events.map(e => e.year))).sort();
     const months = MONTH_ORDER;
     return { regions, neighborhoods, venues, types, months, years };
-  }, []);
+  }, [events]);
 
   const filteredEvents = useMemo(() => {
     const normalizedSearch = normalizeString(searchTerm);
 
-    return EVENTS.filter(event => {
+    return events.filter(event => {
       const matchesSearch = searchTerm === '' ||
         normalizeString(event.name).includes(normalizedSearch) ||
         normalizeString(event.venue).includes(normalizedSearch) ||
@@ -115,7 +186,7 @@ export default function App() {
 
       return matchesSearch && matchesRegion && matchesNeighborhood && matchesVenue && matchesType && matchesMonth && matchesYear;
     });
-  }, [searchTerm, selectedRegion, selectedNeighborhood, selectedVenue, selectedType, selectedMonth, selectedYear]);
+  }, [searchTerm, selectedRegion, selectedNeighborhood, selectedVenue, selectedType, selectedMonth, selectedYear, events]);
 
   const stats = useMemo(() => {
     const total = filteredEvents.length;
@@ -180,7 +251,14 @@ export default function App() {
   };
 
   if (isAdminRoute) {
-    return <AdminPanel onLogout={() => window.location.assign('/')} />;
+    return (
+      <AdminPanel
+        events={events}
+        loading={loadingEvents}
+        firestoreAvailable={firestoreAvailable}
+        onLogout={() => window.location.assign('/')}
+      />
+    );
   }
 
   return (
