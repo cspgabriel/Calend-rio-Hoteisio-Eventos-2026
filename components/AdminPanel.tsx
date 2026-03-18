@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
   addDoc, collection, Timestamp,
-  deleteDoc, doc, updateDoc, getDocs,
+  deleteDoc, doc, updateDoc, getDocs, writeBatch, setDoc,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import {
   X, Plus, LogOut, ShieldCheck, Database, CalendarPlus,
-  Pencil, Trash2, RefreshCw, AlertTriangle,
+  Pencil, Trash2, RefreshCw, AlertTriangle, Upload,
 } from 'lucide-react';
 import { EventData } from '../types';
+import { EVENTS } from '../constants';
 
 const ADMIN_PASSWORD = 'admin123';
 
@@ -86,6 +87,11 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [confirmSingle, setConfirmSingle] = useState<string | null>(null); // id to delete
 
+  /* ── seed Firestore from static data ────────────────────────────────── */
+  const [confirmSeed, setConfirmSeed] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [seedError, setSeedError] = useState<string | null>(null);
+
   /* ── helpers ─────────────────────────────────────────────────────────── */
   const handleUnlock = () => {
     if (password === ADMIN_PASSWORD) {
@@ -117,6 +123,38 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
     loadRows();
     onRefresh?.();
     setSelected(new Set());
+  };
+
+  /* ── seed Firestore with all static events ───────────────────────────── */
+  const handleSeedFirestore = async () => {
+    setSeeding(true);
+    setSeedError(null);
+    setConfirmSeed(false);
+    try {
+      // Firestore batch limit is 500; EVENTS has ~135 so a single batch is fine
+      const batch = writeBatch(db);
+      EVENTS.forEach(event => {
+        const ref = doc(db, 'eventos', event.id);
+        batch.set(ref, {
+          name: event.name,
+          venue: event.venue,
+          type: event.type,
+          start: Timestamp.fromDate(parseDateParts(event.startDate)),
+          end: Timestamp.fromDate(parseDateParts(event.endDate)),
+          neighborhood: event.neighborhood,
+          region: event.region,
+          year: event.year,
+          addedAt: Timestamp.now(),
+        }, { merge: true });
+      });
+      await batch.commit();
+      refresh();
+    } catch (err) {
+      console.error(err);
+      setSeedError(`Falha ao importar eventos. Verifique as regras do Firestore.${err instanceof Error ? ` (${err.message})` : ''}`);
+    } finally {
+      setSeeding(false);
+    }
   };
 
   const parseDateParts = (ddmmyyyy: string) => {
@@ -488,8 +526,47 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
                 <span className="ml-2 text-xs font-normal text-slate-400">({rows.length})</span>
               )}
             </h2>
-            {rowsLoading && <RefreshCw size={14} className="animate-spin text-slate-400" />}
+            <div className="flex items-center gap-2">
+              {!rowsLoading && rows.length === 0 && (
+                <button
+                  onClick={() => setConfirmSeed(true)}
+                  disabled={seeding}
+                  title="Importar os 135 eventos estáticos para o Firestore"
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition disabled:opacity-50"
+                >
+                  <Upload size={13} /> Importar eventos para o Firestore
+                </button>
+              )}
+              {rowsLoading && <RefreshCw size={14} className="animate-spin text-slate-400" />}
+            </div>
           </div>
+
+          {/* seed confirmation */}
+          {confirmSeed && (
+            <div className="mx-6 mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center gap-4">
+              <Upload size={20} className="text-blue-600 shrink-0" />
+              <p className="text-sm text-slate-700 flex-1">
+                Importar <strong>{EVENTS.length} eventos</strong> do calendário estático para o Firestore?
+                Eventos já existentes serão mantidos (merge).
+              </p>
+              <div className="flex gap-2 shrink-0">
+                <button onClick={() => setConfirmSeed(false)}
+                  className="px-3 py-1.5 text-sm bg-white border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-100 transition">
+                  Cancelar
+                </button>
+                <button onClick={handleSeedFirestore} disabled={seeding}
+                  className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition disabled:opacity-50">
+                  {seeding ? 'Importando...' : 'Confirmar'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {seedError && (
+            <div className="mx-6 mt-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">
+              {seedError}
+            </div>
+          )}
 
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-sm">
