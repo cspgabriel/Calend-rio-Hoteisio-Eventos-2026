@@ -13,14 +13,20 @@ const parsePoint = (pointStr: string): { lat: number, lng: number } => {
   }
 };
 
-// Helper to get Portuguese month name from date string to ensure consistency
+// Authoritative list of Portuguese month names — used for both display and filtering.
+// Using a static array avoids any Intl.DateTimeFormat locale inconsistencies across environments.
+export const MONTH_NAMES_PT_BR = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+];
+
+// Helper to get Portuguese month name from date string (DD/MM/YYYY) to ensure consistency
 const getMonthFromDate = (dateStr: string): string => {
   try {
     const parts = dateStr.split('/');
     if (parts.length === 3) {
-      const date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-      const month = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(date);
-      return month.charAt(0).toUpperCase() + month.slice(1);
+      const monthIndex = parseInt(parts[1], 10) - 1; // parts[1] is MM (1-based)
+      return MONTH_NAMES_PT_BR[monthIndex] ?? 'A definir';
     }
     return 'A definir';
   } catch (e) {
