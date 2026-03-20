@@ -13,14 +13,20 @@ const parsePoint = (pointStr: string): { lat: number, lng: number } => {
   }
 };
 
-// Helper to get Portuguese month name from date string to ensure consistency
+// Authoritative list of Portuguese month names — used for both display and filtering.
+// Using a static array avoids any Intl.DateTimeFormat locale inconsistencies across environments.
+export const MONTH_NAMES_PT_BR = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+];
+
+// Helper to get Portuguese month name from date string (DD/MM/YYYY) to ensure consistency
 const getMonthFromDate = (dateStr: string): string => {
   try {
     const parts = dateStr.split('/');
     if (parts.length === 3) {
-      const date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-      const month = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(date);
-      return month.charAt(0).toUpperCase() + month.slice(1);
+      const monthIndex = parseInt(parts[1], 10) - 1; // parts[1] is MM (1-based)
+      return MONTH_NAMES_PT_BR[monthIndex] ?? 'A definir';
     }
     return 'A definir';
   } catch (e) {
@@ -29,7 +35,7 @@ const getMonthFromDate = (dateStr: string): string => {
 };
 
 // Function to normalize neighborhood names to avoid duplicates
-const normalizeNeighborhood = (hood: string): string => {
+export const normalizeNeighborhood = (hood: string): string => {
   if (!hood) return "A definir";
   const h = hood.trim();
   if (h === "Barra Olímpico" || h === "Barra Olimpica") return "Barra Olímpica";
@@ -42,7 +48,7 @@ const normalizeNeighborhood = (hood: string): string => {
 };
 
 // Function to normalize event types to a standardized list
-const standardizeType = (type: string): string => {
+export const standardizeType = (type: string): string => {
   const t = type.toLowerCase();
   if (t.includes('feira') || t.includes('exposição') || t.includes('expo') || t.includes('fashion')) return 'Feira & Exposição';
   if (t.includes('congresso') || t.includes('conferência') || t.includes('summit') || t.includes('assembleia')) return 'Congresso & Conferência';
@@ -56,7 +62,7 @@ const standardizeType = (type: string): string => {
 };
 
 // Function to normalize venue names
-const normalizeVenue = (venue: string): string => {
+export const normalizeVenue = (venue: string): string => {
   if (!venue) return "A definir";
   const v = venue.trim();
   if (v.toLowerCase() === "riocentro" || v.includes("RIOCENTRO")) return "Riocentro";
@@ -64,7 +70,7 @@ const normalizeVenue = (venue: string): string => {
   if (v.toLowerCase() === "cidade das artes") return "Cidade das Artes";
   if (v.toLowerCase() === "pier mauá" || v.toLowerCase() === "pier maua") return "Pier Mauá";
   if (v.toLowerCase().includes("sheraton grand")) return "Sheraton Grand Rio";
-  if (v.toLowerCase().includes("expo mag") || v.toLowerCase().includes("expo rio")) return "Expo Mag";
+  if (v.toLowerCase().includes("expo mag")) return "Expo Mag";
   if (v.toLowerCase() === "qualistage") return "Qualistage";
   if (v.toLowerCase() === "vivo rio") return "Vivo Rio";
   if (v.toLowerCase().includes("teatro opus")) return "Teatro Opus Città";
@@ -81,7 +87,7 @@ const normalizeVenue = (venue: string): string => {
 };
 
 // Helper to map neighborhoods to regions
-const getRegion = (neighborhood: string): string => {
+export const getRegion = (neighborhood: string): string => {
   const n = neighborhood.toLowerCase();
   
   if (['copacabana', 'ipanema', 'leblon', 'leme', 'flamengo', 'botafogo', 'glória', 'catete', 'laranjeiras', 'cosme velho', 'urca', 'humaitá', 'jardim botânico', 'gávea', 'são conrado', 'lagoa', 'aterro do flamengo'].includes(n)) {

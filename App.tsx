@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { EVENTS, TOURISM_FAIRS } from './constants';
+import { EVENTS, TOURISM_FAIRS, MONTH_NAMES_PT_BR, normalizeNeighborhood, getRegion, normalizeVenue, standardizeType } from './constants';
 import { EventData } from './types';
 import StatsCards from './components/StatsCards';
 import { MonthlyChart, TypeRankingChart } from './components/Charts';
@@ -23,10 +23,7 @@ import {
 
 type ViewType = 'dashboard' | 'list' | 'calendar' | 'location' | 'high-demand' | 'recent-additions' | 'tourism-fairs';
 
-const MONTH_ORDER = [
-  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-];
+const MONTH_ORDER = MONTH_NAMES_PT_BR;
 
 const NAV_ITEMS = [
   { id: 'list', label: 'Lista Completa', icon: List },
@@ -89,17 +86,19 @@ export default function App() {
           addedAtRaw?.toDate
             ? addedAtRaw.toDate()
             : null;
+        const normalizedNeighborhood = normalizeNeighborhood(data.neighborhood || '');
+        const resolvedRegion = (data.region && data.region !== 'A definir') ? data.region : getRegion(normalizedNeighborhood);
 
         return {
           id: doc.id,
           name: data.name,
-          venue: data.venue,
-          type: data.type,
+          venue: normalizeVenue(data.venue || ''),
+          type: standardizeType(data.type || ''),
           startDate: startDate.toLocaleDateString('pt-BR'),
           endDate: endDate.toLocaleDateString('pt-BR'),
-          month: startDate.toLocaleDateString('pt-BR', { month: 'long' }),
-          neighborhood: data.neighborhood,
-          region: data.region,
+          month: MONTH_NAMES_PT_BR[startDate.getMonth()] ?? 'A definir',
+          neighborhood: normalizedNeighborhood,
+          region: resolvedRegion,
           year: startDate.getFullYear().toString(),
           lat: 0,
           lng: 0,
@@ -364,27 +363,27 @@ export default function App() {
                         <input type="text" placeholder="Buscar..." className="bg-transparent border-none outline-none text-sm w-full placeholder-slate-400 text-slate-700" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                       </div>
                       <select value={selectedRegion} onChange={(e) => setSelectedRegion(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
-                        <option>Todas as Regiões</option>
+                        <option value="Todas as Regiões">Todas as Regiões</option>
                         {filterOptions.regions.map(r => <option key={r} value={r}>{r}</option>)}
                       </select>
                       <select value={selectedNeighborhood} onChange={(e) => setSelectedNeighborhood(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
-                        <option>Todos os Bairros</option>
+                        <option value="Todos os Bairros">Todos os Bairros</option>
                         {filterOptions.neighborhoods.map(n => <option key={n} value={n}>{n}</option>)}
                       </select>
                       <select value={selectedVenue} onChange={(e) => setSelectedVenue(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
-                        <option>Todos os Locais</option>
+                        <option value="Todos os Locais">Todos os Locais</option>
                         {filterOptions.venues.map(v => <option key={v} value={v}>{v}</option>)}
                       </select>
                       <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
-                        <option>Todos os Tipos</option>
+                        <option value="Todos os Tipos">Todos os Tipos</option>
                         {filterOptions.types.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                       <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
-                        <option>Todos os Meses</option>
+                        <option value="Todos os Meses">Todos os Meses</option>
                         {filterOptions.months.map(m => <option key={m} value={m}>{m}</option>)}
                       </select>
                       <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
-                        <option>Todos os Anos</option>
+                        <option value="Todos os Anos">Todos os Anos</option>
                         {filterOptions.years.map(y => <option key={y} value={y}>{y}</option>)}
                       </select>
                     </div>
