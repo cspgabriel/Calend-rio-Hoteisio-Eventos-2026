@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { EVENTS, TOURISM_FAIRS } from './constants';
+import { EVENTS, TOURISM_FAIRS, normalizeNeighborhood, getRegion, normalizeVenue, standardizeType } from './constants';
 import { EventData } from './types';
 import StatsCards from './components/StatsCards';
 import { MonthlyChart, TypeRankingChart } from './components/Charts';
@@ -93,13 +93,13 @@ export default function App() {
         return {
           id: doc.id,
           name: data.name,
-          venue: data.venue,
-          type: data.type,
+          venue: normalizeVenue(data.venue || ''),
+          type: standardizeType(data.type || ''),
           startDate: startDate.toLocaleDateString('pt-BR'),
           endDate: endDate.toLocaleDateString('pt-BR'),
-          month: startDate.toLocaleDateString('pt-BR', { month: 'long' }),
-          neighborhood: data.neighborhood,
-          region: data.region,
+          month: (() => { const m = startDate.toLocaleDateString('pt-BR', { month: 'long' }); return m.charAt(0).toUpperCase() + m.slice(1); })(),
+          neighborhood: normalizeNeighborhood(data.neighborhood || ''),
+          region: (() => { const hood = normalizeNeighborhood(data.neighborhood || ''); return (data.region && data.region !== 'A definir') ? data.region : getRegion(hood); })(),
           year: startDate.getFullYear().toString(),
           lat: 0,
           lng: 0,
@@ -364,27 +364,27 @@ export default function App() {
                         <input type="text" placeholder="Buscar..." className="bg-transparent border-none outline-none text-sm w-full placeholder-slate-400 text-slate-700" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                       </div>
                       <select value={selectedRegion} onChange={(e) => setSelectedRegion(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
-                        <option>Todas as Regiões</option>
+                        <option value="Todas as Regiões">Todas as Regiões</option>
                         {filterOptions.regions.map(r => <option key={r} value={r}>{r}</option>)}
                       </select>
                       <select value={selectedNeighborhood} onChange={(e) => setSelectedNeighborhood(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
-                        <option>Todos os Bairros</option>
+                        <option value="Todos os Bairros">Todos os Bairros</option>
                         {filterOptions.neighborhoods.map(n => <option key={n} value={n}>{n}</option>)}
                       </select>
                       <select value={selectedVenue} onChange={(e) => setSelectedVenue(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
-                        <option>Todos os Locais</option>
+                        <option value="Todos os Locais">Todos os Locais</option>
                         {filterOptions.venues.map(v => <option key={v} value={v}>{v}</option>)}
                       </select>
                       <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
-                        <option>Todos os Tipos</option>
+                        <option value="Todos os Tipos">Todos os Tipos</option>
                         {filterOptions.types.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                       <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
-                        <option>Todos os Meses</option>
+                        <option value="Todos os Meses">Todos os Meses</option>
                         {filterOptions.months.map(m => <option key={m} value={m}>{m}</option>)}
                       </select>
                       <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 outline-none">
-                        <option>Todos os Anos</option>
+                        <option value="Todos os Anos">Todos os Anos</option>
                         {filterOptions.years.map(y => <option key={y} value={y}>{y}</option>)}
                       </select>
                     </div>
