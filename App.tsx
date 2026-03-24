@@ -67,13 +67,18 @@ export default function App() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(!isEmbed);
   const [events, setEvents] = useState<EventData[]>(EVENTS);
+  const [firebaseEvents, setFirebaseEvents] = useState<EventData[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [firestoreAvailable, setFirestoreAvailable] = useState<boolean | null>(null);
 
-  const loadEvents = async () => {
+  const loadEvents = async (showLoadingIndicator = true) => {
+    if (showLoadingIndicator) {
+      setLoadingEvents(true);
+    }
     if (!db) {
       setFirestoreAvailable(false);
       setEvents(EVENTS);
+      setFirebaseEvents([]);
       setLoadingEvents(false);
       return;
     }
@@ -112,6 +117,8 @@ export default function App() {
         } as EventData;
       });
 
+      setFirebaseEvents(firebaseEvents);
+
       // Merge static events with firestore events, preferring firestore when IDs match
       const merged = [...EVENTS];
       const existingIds = new Set(merged.map(e => e.id));
@@ -130,6 +137,7 @@ export default function App() {
       console.error('Erro ao carregar eventos do Firestore:', err);
       setFirestoreAvailable(false);
       setEvents(EVENTS);
+      setFirebaseEvents([]);
     } finally {
       setLoadingEvents(false);
     }
@@ -253,11 +261,11 @@ export default function App() {
   if (isAdminRoute) {
     return (
       <AdminPanel
-        events={events}
+        events={firestoreAvailable !== false ? firebaseEvents : []}
         loading={loadingEvents}
         firestoreAvailable={firestoreAvailable}
         onLogout={() => window.location.assign('/')}
-        onReload={loadEvents}
+        onReload={() => loadEvents(false)}
       />
     );
   }

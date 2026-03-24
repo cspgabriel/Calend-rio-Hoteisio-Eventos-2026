@@ -12,7 +12,7 @@ type Props = {
   loading: boolean;
   firestoreAvailable: boolean | null;
   onLogout?: () => void;
-  onReload?: () => void;
+  onReload?: () => Promise<void> | void;
 };
 
 const EMPTY_EVENT_FORM = {
@@ -96,6 +96,9 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
         addedAt: Timestamp.now(),
       });
 
+      if (onReload) {
+        await onReload();
+      }
       setSuccess('Evento criado com sucesso!');
       handleReset();
     } catch (err) {
