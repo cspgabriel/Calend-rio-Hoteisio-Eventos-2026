@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { addDoc, collection, Timestamp } from 'firebase/firestore';
+import { addDoc, collection, Timestamp, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, AlertTriangle } from 'lucide-react';
 import EventList from './EventList';
 import { EventData } from '../types';
 
@@ -12,6 +12,7 @@ type Props = {
   loading: boolean;
   firestoreAvailable: boolean | null;
   onLogout?: () => void;
+  onReload?: () => void;
 };
 
 const EMPTY_EVENT_FORM = {
@@ -24,7 +25,7 @@ const EMPTY_EVENT_FORM = {
   year: '',
 };
 
-export default function AdminPanel({ events, loading, firestoreAvailable, onLogout }: Props) {
+export default function AdminPanel({ events, loading, firestoreAvailable, onLogout, onReload }: Props) {
   const [isLocked, setIsLocked] = useState(true);
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +33,17 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
   const [form, setForm] = useState(EMPTY_EVENT_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Edit state
+  const [editingEvent, setEditingEvent] = useState<EventData | null>(null);
+  const [editForm, setEditForm] = useState(EMPTY_EVENT_FORM);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSuccess, setEditSuccess] = useState<string | null>(null);
+
+  // Delete state
+  const [pendingDelete, setPendingDelete] = useState<EventData | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   const handleUnlock = () => {
     if (password === ADMIN_PASSWORD) {
@@ -91,6 +103,82 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
       setError('Falha ao criar evento. Verifique as permissões do Firestore.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleEdit = (event: EventData) => {
+    setEditingEvent(event);
+    setEditForm({
+      name: event.name,
+      venue: event.venue,
+      type: event.type,
+      startDate: event.startDate,
+      endDate: event.endDate,
+      neighborhood: event.neighborhood,
+      year: event.year,
+    });
+    setEditError(null);
+    setEditSuccess(null);
+  };
+
+  const handleUpdate = async () => {
+    if (!db || !editingEvent) return;
+
+    const required = ['name', 'venue', 'type', 'startDate', 'endDate', 'neighborhood', 'year'] as const;
+    for (const key of required) {
+      if (!editForm[key]) {
+        setEditError('Preencha todos os campos antes de salvar.');
+        return;
+      }
+    }
+
+    setEditSubmitting(true);
+    setEditError(null);
+    setEditSuccess(null);
+
+    try {
+      const startParts = editForm.startDate.split('/');
+      const endParts = editForm.endDate.split('/');
+      const start = new Date(Number(startParts[2]), Number(startParts[1]) - 1, Number(startParts[0]));
+      const end = new Date(Number(endParts[2]), Number(endParts[1]) - 1, Number(endParts[0]));
+
+      await updateDoc(doc(db, 'eventos', editingEvent.id), {
+        name: editForm.name,
+        venue: editForm.venue,
+        type: editForm.type,
+        start: Timestamp.fromDate(start),
+        end: Timestamp.fromDate(end),
+        neighborhood: editForm.neighborhood,
+        region: editingEvent.region || 'A definir',
+        year: editForm.year,
+      });
+
+      setEditSuccess('Evento atualizado com sucesso!');
+      onReload?.();
+      setTimeout(() => {
+        setEditingEvent(null);
+        setEditSuccess(null);
+      }, 1500);
+    } catch (err) {
+      console.error(err);
+      setEditError('Falha ao atualizar evento. Verifique as permissões do Firestore.');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!db || !pendingDelete) return;
+
+    setDeleteSubmitting(true);
+    try {
+      await deleteDoc(doc(db, 'eventos', pendingDelete.id));
+      setPendingDelete(null);
+      onReload?.();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDeleteSubmitting(false);
     }
   };
 
@@ -288,9 +376,143 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
 
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
           <h2 className="text-lg font-semibold text-slate-800 mb-3">Lista de eventos</h2>
-          <EventList events={events} />
+          <EventList
+            events={events}
+            onEdit={handleEdit}
+            onDelete={(event) => setPendingDelete(event)}
+          />
         </div>
       </div>
+
+      {/* Edit Modal */}
+      {editingEvent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg">
+            <div className="flex items-start justify-between p-6 border-b border-slate-100">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-800">Editar evento</h2>
+                <p className="text-sm text-slate-500 mt-0.5">Atualize os campos e clique em salvar.</p>
+              </div>
+              <button
+                onClick={() => { setEditingEvent(null); setEditError(null); setEditSuccess(null); }}
+                className="text-slate-400 hover:text-slate-600 mt-0.5"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Nome do Evento</label>
+                <input
+                  value={editForm.name}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Local/Localização</label>
+                <input
+                  value={editForm.venue}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, venue: e.target.value }))}
+                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Tipo de Evento</label>
+                <input
+                  value={editForm.type}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, type: e.target.value }))}
+                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Bairro</label>
+                <input
+                  value={editForm.neighborhood}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, neighborhood: e.target.value }))}
+                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Data de Início (DD/MM/YYYY)</label>
+                <input
+                  value={editForm.startDate}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, startDate: e.target.value }))}
+                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Data de Fim (DD/MM/YYYY)</label>
+                <input
+                  value={editForm.endDate}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, endDate: e.target.value }))}
+                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Ano</label>
+                <input
+                  value={editForm.year}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, year: e.target.value }))}
+                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              </div>
+            </div>
+
+            {editError && <p className="text-sm text-red-600 px-6 pb-2">{editError}</p>}
+            {editSuccess && <p className="text-sm text-emerald-600 px-6 pb-2">{editSuccess}</p>}
+
+            <div className="flex items-center gap-3 p-6 pt-2 border-t border-slate-100">
+              <button
+                onClick={handleUpdate}
+                disabled={editSubmitting}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+              >
+                {editSubmitting ? 'Salvando...' : 'Salvar alterações'}
+              </button>
+              <button
+                onClick={() => { setEditingEvent(null); setEditError(null); setEditSuccess(null); }}
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {pendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-sm p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <AlertTriangle size={22} className="text-red-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <h2 className="text-base font-semibold text-slate-800">Excluir evento</h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  Tem certeza que deseja excluir <span className="font-semibold text-slate-700">"{pendingDelete.name}"</span>? Esta ação não pode ser desfeita.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                onClick={() => setPendingDelete(null)}
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleteSubmitting}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50"
+              >
+                {deleteSubmitting ? 'Excluindo...' : 'Excluir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
