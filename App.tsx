@@ -257,6 +257,7 @@ export default function App() {
         loading={loadingEvents}
         firestoreAvailable={firestoreAvailable}
         onLogout={() => window.location.assign('/')}
+        onReload={loadEvents}
       />
     );
   }

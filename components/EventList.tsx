@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { EventData } from '../types';
 import { normalizeString, formatInclusionDate } from '../utils';
-import { MapPin, Calendar, Building2, ArrowUpDown, ArrowUp, ArrowDown, Search, Clock } from 'lucide-react';
+import { MapPin, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Search, Clock, Pencil, Trash2 } from 'lucide-react';
 
 interface EventListProps {
   events: EventData[];
+  onEdit?: (event: EventData) => void;
+  onDelete?: (event: EventData) => void;
 }
 
 type SortConfig = {
@@ -12,7 +14,11 @@ type SortConfig = {
   direction: 'asc' | 'desc';
 } | null;
 
-const EventList: React.FC<EventListProps> = ({ events }) => {
+// Static event IDs generated in constants.ts use these prefixes; anything else is a Firestore document
+const isFirestoreEvent = (event: EventData) =>
+  !event.id.startsWith('evt-') && !event.id.startsWith('tf-');
+
+const EventList: React.FC<EventListProps> = ({ events, onEdit, onDelete }) => {
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [filters, setFilters] = useState({
     name: '',
@@ -128,6 +134,9 @@ const EventList: React.FC<EventListProps> = ({ events }) => {
                     <input type="text" placeholder="Data..." className="w-full text-xs p-1.5 border rounded font-normal outline-none" value={filters.inclusion} onChange={(e) => setFilters({...filters, inclusion: e.target.value})} />
                 </div>
               </th>
+              {(onEdit || onDelete) && (
+                <th className="px-6 py-4 min-w-[100px] text-center">Ações</th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -163,11 +172,39 @@ const EventList: React.FC<EventListProps> = ({ events }) => {
                       {formatInclusionDate(event.inclusionDate)}
                     </div>
                   </td>
+                  {(onEdit || onDelete) && (
+                    <td className="px-6 py-4">
+                      {isFirestoreEvent(event) ? (
+                        <div className="flex items-center gap-2 justify-center">
+                          {onEdit && (
+                            <button
+                              onClick={() => onEdit(event)}
+                              title="Editar evento"
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                          )}
+                          {onDelete && (
+                            <button
+                              onClick={() => onDelete(event)}
+                              title="Excluir evento"
+                              className="p-1.5 text-red-500 hover:bg-red-50 rounded transition"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="block text-center text-xs text-slate-300" title="Evento estático — edite em constants.ts">—</span>
+                      )}
+                    </td>
+                  )}
                 </tr>
             ))}
             {processedEvents.length === 0 && (
                 <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                    <td colSpan={(onEdit || onDelete) ? 6 : 5} className="px-6 py-8 text-center text-slate-500">
                         Nenhum evento encontrado.
                     </td>
                 </tr>
