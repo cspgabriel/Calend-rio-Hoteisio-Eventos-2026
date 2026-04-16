@@ -12,7 +12,7 @@ import UpcomingEvents from './components/UpcomingEvents';
 import RecentAdditionsView from './components/RecentAdditionsView';
 import TourismFairsView from './components/TourismFairsView';
 import AdminPanel from './components/AdminPanel';
-import { calculateDemandLevel, normalizeString } from './utils';
+import { calculateDemandLevel, normalizeString, parseDate } from './utils';
 import { downloadIcs } from './calendarExport';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
@@ -71,10 +71,73 @@ export default function App() {
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [firestoreAvailable, setFirestoreAvailable] = useState<boolean | null>(null);
 
+  const isLegacyBarraJacarepagu = (value?: string) => {
+    if (!value) return false;
+    const normalized = normalizeString(value);
+    return normalized.includes('barra') && normalized.includes('jacarepagu');
+  };
+
+  const getEventYear = (event: Pick<EventData, 'year' | 'startDate' | 'parsedStartDate'>) => {
+    if (event.parsedStartDate instanceof Date && !Number.isNaN(event.parsedStartDate.getTime())) {
+      return String(event.parsedStartDate.getFullYear());
+    }
+
+    if (event.startDate) {
+      const parsedStart = parseDate(event.startDate);
+      if (!Number.isNaN(parsedStart.getTime())) {
+        return String(parsedStart.getFullYear());
+      }
+    }
+
+    return String(event.year ?? '').trim();
+  };
+
+  const getEventMonth = (event: Pick<EventData, 'startDate' | 'parsedStartDate' | 'month'>) => {
+    if (event.parsedStartDate instanceof Date && !Number.isNaN(event.parsedStartDate.getTime())) {
+      return MONTH_ORDER[event.parsedStartDate.getMonth()] || event.month;
+    }
+
+    if (event.startDate) {
+      const parsedStart = parseDate(event.startDate);
+      if (!Number.isNaN(parsedStart.getTime())) {
+        return MONTH_ORDER[parsedStart.getMonth()] || event.month;
+      }
+    }
+
+    return event.month;
+  };
+
+  const normalizeRegion = (region?: string) => {
+    if (!region) return 'A definir';
+    if (isLegacyBarraJacarepagu(region)) {
+      return 'Zona Oeste';
+    }
+    const normalized = region
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+
+    if (normalized.includes('barra') && normalized.includes('jacarepagu')) {
+      return 'Zona Oeste';
+    }
+
+    return region;
+  };
+
+  const excludeYear2025 = (event: EventData) => getEventYear(event) !== '2025';
+  const excludeApogeuHouseMusic = (event: EventData) =>
+    !normalizeString(event.name).includes('apogeu house music');
+  const includeVisibleEvent = (event: EventData) => excludeYear2025(event) && excludeApogeuHouseMusic(event);
+
   const loadEvents = async () => {
     if (!db) {
       setFirestoreAvailable(false);
-      setEvents(EVENTS);
+      setEvents(EVENTS
+        .filter(includeVisibleEvent)
+        .map(event => ({
+          ...event,
+          region: normalizeRegion(event.region),
+        })));
       setLoadingEvents(false);
       return;
     }
@@ -100,7 +163,7 @@ export default function App() {
           endDate: endDate.toLocaleDateString('pt-BR'),
           month: startDate.toLocaleDateString('pt-BR', { month: 'long' }),
           neighborhood: data.neighborhood,
-          region: data.region,
+          region: normalizeRegion(data.region),
           year: startDate.getFullYear().toString(),
           lat: 0,
           lng: 0,
@@ -114,7 +177,12 @@ export default function App() {
       });
 
       // Merge static events with firestore events, preferring firestore when IDs match
-      const merged = [...EVENTS];
+      const merged = EVENTS
+        .filter(includeVisibleEvent)
+        .map(event => ({
+          ...event,
+          region: normalizeRegion(event.region),
+        }));
       const existingIds = new Set(merged.map(e => e.id));
       firebaseEvents.forEach(fe => {
         if (existingIds.has(fe.id)) {
@@ -125,12 +193,17 @@ export default function App() {
         }
       });
 
-      setEvents(merged);
+      setEvents(merged.filter(includeVisibleEvent));
       setFirestoreAvailable(true);
     } catch (err) {
       console.error('Erro ao carregar eventos do Firestore:', err);
       setFirestoreAvailable(false);
-      setEvents(EVENTS);
+      setEvents(EVENTS
+        .filter(includeVisibleEvent)
+        .map(event => ({
+          ...event,
+          region: normalizeRegion(event.region),
+        })));
     } finally {
       setLoadingEvents(false);
     }
@@ -160,14 +233,36 @@ export default function App() {
   };
 
   const filterOptions = useMemo(() => {
-    const regions = Array.from(new Set(events.map(e => e.region))).sort();
-    const neighborhoods = Array.from(new Set(events.map(e => e.neighborhood))).sort();
-    const venues = Array.from(new Set(events.map(e => e.venue))).sort();
-    const types = Array.from(new Set(events.map(e => e.type))).sort();
-    const years = Array.from(new Set(events.map(e => e.year))).sort();
+    const regions = (Array.from(new Set(events.map(e => e.region))) as string[])
+      .filter(region => region && !isLegacyBarraJacarepagu(region) && region !== '2025' && region !== '2024')
+      .sort();
+    const neighborhoods = (Array.from(new Set(events.map(e => e.neighborhood))) as string[])
+      .filter(n => n && n !== '2025' && n !== '2024');
+    const venues = (Array.from(new Set(events.map(e => e.venue))) as string[])
+      .filter(v => v && v !== '2025' && v !== '2024');
+    const types = (Array.from(new Set(events.map(e => e.type))) as string[])
+      .filter(t => t && t !== '2025' && t !== '2024');
+    const years = (Array.from(new Set(events.map(e => getEventYear(e)))) as string[])
+      .filter(year => {
+        const y = String(year).trim();
+        return y !== '2025' && y !== '2024' && y !== '';
+      })
+      .sort();
     const months = MONTH_ORDER;
     return { regions, neighborhoods, venues, types, months, years };
   }, [events]);
+
+  useEffect(() => {
+    if (selectedRegion !== 'Todas as Regiões' && !filterOptions.regions.includes(selectedRegion)) {
+      setSelectedRegion('Todas as Regiões');
+    }
+  }, [filterOptions.regions, selectedRegion]);
+
+  useEffect(() => {
+    if (selectedYear !== 'Todos os Anos' && !filterOptions.years.includes(selectedYear)) {
+      setSelectedYear('Todos os Anos');
+    }
+  }, [filterOptions.years, selectedYear]);
 
   const filteredEvents = useMemo(() => {
     const normalizedSearch = normalizeString(searchTerm);
@@ -182,8 +277,8 @@ export default function App() {
       const matchesNeighborhood = selectedNeighborhood === 'Todos os Bairros' || event.neighborhood === selectedNeighborhood;
       const matchesVenue = selectedVenue === 'Todos os Locais' || event.venue === selectedVenue;
       const matchesType = selectedType === 'Todos os Tipos' || event.type === selectedType;
-      const matchesMonth = selectedMonth === 'Todos os Meses' || event.month === selectedMonth;
-      const matchesYear = selectedYear === 'Todos os Anos' || event.year === selectedYear;
+      const matchesMonth = selectedMonth === 'Todos os Meses' || getEventMonth(event) === selectedMonth;
+      const matchesYear = selectedYear === 'Todos os Anos' || getEventYear(event) === selectedYear;
 
       return matchesSearch && matchesRegion && matchesNeighborhood && matchesVenue && matchesType && matchesMonth && matchesYear;
     });
@@ -196,7 +291,8 @@ export default function App() {
     let highDemand = 0;
 
     filteredEvents.forEach(e => {
-      monthCounts[e.month] = (monthCounts[e.month] || 0) + 1;
+      const month = getEventMonth(e);
+      monthCounts[month] = (monthCounts[month] || 0) + 1;
       neighborhoodCounts[e.neighborhood] = (neighborhoodCounts[e.neighborhood] || 0) + 1;
       const demand = calculateDemandLevel(e);
       if (demand === 'Muito Alta' || demand === 'Alta') highDemand++;
@@ -237,7 +333,7 @@ export default function App() {
         `"${e.type}"`,
         e.startDate,
         e.endDate,
-        e.month,
+        getEventMonth(e),
         e.year
       ].join(";"))
     ].join("\n");

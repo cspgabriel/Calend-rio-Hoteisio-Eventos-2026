@@ -19,7 +19,7 @@ export const formatInclusionDate = (dateStr: string): string => {
     const yearStr = parts[2];
     const year = parseInt(yearStr);
     if (year < 2026) {
-      return yearStr;
+      return `${parts[0]}/${parts[1]}`;
     }
   }
   return dateStr;

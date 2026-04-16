@@ -89,7 +89,7 @@ const getRegion = (neighborhood: string): string => {
   }
   
   if (['barra da tijuca', 'barra olímpica', 'recreio', 'jacarepaguá', 'camorim', 'vargem grande', 'vargem pequena', 'itanhangá', 'joá'].includes(n)) {
-    return 'Barra & Jacarepaguá';
+    return 'Zona Oeste';
   }
   
   if (['centro', 'cidade nova', 'gamboa', 'saúde', 'santo cristo', 'lapa', 'santa teresa', 'rio de janeiro'].includes(n)) {
@@ -111,6 +111,11 @@ const getRegion = (neighborhood: string): string => {
 };
 
 const RAW_EVENTS_DATA = [
+  // --- INCLUSÕES 27/03/2026 ---
+  { name: "Spin Doctors e Smash Mouth", venue: "Fundição Progresso", type: "Show & Festival", start: "22/04/2026", end: "22/04/2026", neighborhood: "Lapa", point: "POINT (-43.1805 -22.9138)", year: "2026", addedAt: "27/03/2026" },
+  { name: "Duda Beat", venue: "Circo Voador", type: "Show & Festival", start: "27/03/2026", end: "27/03/2026", neighborhood: "Lapa", point: "POINT (-43.1812 -22.9126)", year: "2026", addedAt: "27/03/2026" },
+  { name: "Breakfast Weekend", venue: "Rio de Janeiro (Diversos Locais)", type: "Festival", start: "28/03/2026", end: "26/04/2026", neighborhood: "Vários", point: "", year: "2026", addedAt: "27/03/2026" },
+
   // --- NOVAS INCLUSÕES ---
   { name: "Partnership for Health Cities Summit", venue: "Fairmont Rio de Janeiro Copacabana", type: "Congresso", start: "30/03/2026", end: "02/04/2026", neighborhood: "Copacabana", point: "POINT (-43.1888 -22.986)", year: "2026", addedAt: "18/03/2026" },
   { name: "Hyrox 2026", venue: "Riocentro", type: "Esporte", start: "27/11/2026", end: "27/11/2026", neighborhood: "Barra Olímpica", point: "POINT (-43.3966 -22.9666)", year: "2026", addedAt: "16/03/2026" },
@@ -196,7 +201,6 @@ const RAW_EVENTS_DATA = [
   { name: "SBC Summit Rio 2026", venue: "Riocentro", type: "Congresso", start: "03/03/2026", end: "05/03/2026", neighborhood: "Barra Olímpica", point: "POINT (-43.4028 -22.9731)", year: "2026", addedAt: "20/11/2024" },
   { name: "International AIDS Conference", venue: "Riocentro", type: "Congresso Médico", start: "26/07/2026", end: "31/07/2026", neighborhood: "Barra Olímpica", point: "POINT (-43.4028 -22.9731)", year: "2026", addedAt: "15/12/2024" },
   { name: "Estética in Rio", venue: "Riocentro", type: "Congresso/Feira", start: "16/05/2026", end: "18/05/2026", neighborhood: "Barra Olímpica", point: "POINT (-43.3966 -22.9666)", year: "2026", addedAt: "05/12/2024" },
-  { name: "APOGEU HOUSE MUSIC", venue: "Riocentro", type: "Show/Festa", start: "30/12/2025", end: "30/12/2025", neighborhood: "Barra Olímpica", point: "POINT (-43.3966 -22.9666)", year: "2025", addedAt: "10/10/2024" },
   { name: "Ensaios da Anitta", venue: "A definir", type: "Show/Festival", start: "20/01/2026", end: "25/01/2026", neighborhood: "A definir", point: "", year: "2026", addedAt: "15/11/2024" },
   { name: "Mega Gestante (Fev)", venue: "Riocentro", type: "Feira", start: "04/02/2026", end: "08/02/2026", neighborhood: "Barra Olímpica", point: "POINT (-43.3966 -22.9666)", year: "2026", addedAt: "15/11/2024" },
   { name: "Carnaval We Make", venue: "A definir", type: "Festa/Carnaval", start: "13/02/2026", end: "13/02/2026", neighborhood: "A definir", point: "", year: "2026", addedAt: "15/11/2024" },
