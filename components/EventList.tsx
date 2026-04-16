@@ -14,10 +14,6 @@ type SortConfig = {
   direction: 'asc' | 'desc';
 } | null;
 
-// Static event IDs generated in constants.ts use these prefixes; anything else is a Firestore document
-const isFirestoreEvent = (event: EventData) =>
-  !event.id.startsWith('evt-') && !event.id.startsWith('tf-');
-
 const EventList: React.FC<EventListProps> = ({ events, onEdit, onDelete }) => {
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [filters, setFilters] = useState({
@@ -185,7 +181,7 @@ const EventList: React.FC<EventListProps> = ({ events, onEdit, onDelete }) => {
                             Editar
                           </button>
                         )}
-                        {onDelete && isFirestoreEvent(event) && (
+                        {onDelete && (
                           <button
                             onClick={() => onDelete(event)}
                             title="Excluir evento"

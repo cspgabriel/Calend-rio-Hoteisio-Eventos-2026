@@ -178,7 +178,15 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
 
     setDeleteSubmitting(true);
     try {
-      await deleteDoc(doc(db, 'eventos', pendingDelete.id));
+      const isStaticEvent = pendingDelete.id.startsWith('evt-') || pendingDelete.id.startsWith('tf-');
+      if (isStaticEvent) {
+        await setDoc(doc(db, 'eventos', pendingDelete.id), {
+          deleted: true,
+          updatedAt: Timestamp.now(),
+        }, { merge: true });
+      } else {
+        await deleteDoc(doc(db, 'eventos', pendingDelete.id));
+      }
       setPendingDelete(null);
       onReload?.();
     } catch (err) {

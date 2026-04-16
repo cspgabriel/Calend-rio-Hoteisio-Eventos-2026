@@ -81,8 +81,14 @@ export default function App() {
 
     try {
       const querySnapshot = await getDocs(collection(db, 'eventos'));
-      const firebaseEvents = querySnapshot.docs.map(doc => {
+      const deletedIds = new Set<string>();
+      const firebaseEvents = querySnapshot.docs.flatMap(doc => {
         const data = doc.data();
+        if (data.deleted === true) {
+          deletedIds.add(doc.id);
+          return [];
+        }
+
         const startDate = data.start?.toDate ? data.start.toDate() : new Date(data.start);
         const endDate = data.end?.toDate ? data.end.toDate() : new Date(data.end);
         const addedAtRaw = data.addedAt;
@@ -91,7 +97,7 @@ export default function App() {
             ? addedAtRaw.toDate()
             : null;
 
-        return {
+        return [{
           id: doc.id,
           name: data.name,
           venue: data.venue,
@@ -110,11 +116,11 @@ export default function App() {
           city: 'Rio de Janeiro',
           state: 'RJ',
           country: 'Brasil'
-        } as EventData;
+        } as EventData];
       });
 
       // Merge static events with firestore events, preferring firestore when IDs match
-      const merged = [...EVENTS];
+      const merged = EVENTS.filter(event => !deletedIds.has(event.id));
       const existingIds = new Set(merged.map(e => e.id));
       firebaseEvents.forEach(fe => {
         if (existingIds.has(fe.id)) {
