@@ -13,6 +13,7 @@ import RecentAdditionsView from './components/RecentAdditionsView';
 import TourismFairsView from './components/TourismFairsView';
 import AdminPanel from './components/AdminPanel';
 import { calculateDemandLevel, normalizeString } from './utils';
+import { downloadIcs } from './calendarExport';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 import { 
@@ -250,6 +251,11 @@ export default function App() {
     document.body.removeChild(link);
   };
 
+
+  const handleDownloadIcal = () => {
+    downloadIcs(filteredEvents);
+  };
+
   if (isAdminRoute) {
     return (
       <AdminPanel
@@ -355,6 +361,13 @@ export default function App() {
                         >
                             <Download size={16} />
                             Exportar Excel
+                        </button>
+                        <button 
+                            onClick={handleDownloadIcal}
+                            className="flex items-center gap-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg transition-colors border border-blue-200"
+                        >
+                            <CalendarIcon size={16} />
+                            Exportar iCal (.ics)
                         </button>
                       </div>
                     </div>
