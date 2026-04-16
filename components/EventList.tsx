@@ -14,10 +14,6 @@ type SortConfig = {
   direction: 'asc' | 'desc';
 } | null;
 
-// Static event IDs generated in constants.ts use these prefixes; anything else is a Firestore document
-const isFirestoreEvent = (event: EventData) =>
-  !event.id.startsWith('evt-') && !event.id.startsWith('tf-');
-
 const EventList: React.FC<EventListProps> = ({ events, onEdit, onDelete }) => {
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [filters, setFilters] = useState({
@@ -174,30 +170,28 @@ const EventList: React.FC<EventListProps> = ({ events, onEdit, onDelete }) => {
                   </td>
                   {(onEdit || onDelete) && (
                     <td className="px-6 py-4">
-                      {isFirestoreEvent(event) ? (
-                        <div className="flex items-center gap-2 justify-center">
-                          {onEdit && (
-                            <button
-                              onClick={() => onEdit(event)}
-                              title="Editar evento"
-                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition"
-                            >
-                              <Pencil size={15} />
-                            </button>
-                          )}
-                          {onDelete && (
-                            <button
-                              onClick={() => onDelete(event)}
-                              title="Excluir evento"
-                              className="p-1.5 text-red-500 hover:bg-red-50 rounded transition"
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="block text-center text-xs text-slate-300" title="Evento estático — edite em constants.ts">—</span>
-                      )}
+                      <div className="flex items-center gap-2 justify-center">
+                        {onEdit && (
+                          <button
+                            onClick={() => onEdit(event)}
+                            title="Editar evento"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md transition"
+                          >
+                            <Pencil size={15} />
+                            Editar
+                          </button>
+                        )}
+                        {onDelete && (
+                          <button
+                            onClick={() => onDelete(event)}
+                            title="Excluir evento"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 rounded-md transition"
+                          >
+                            <Trash2 size={15} />
+                            EXCLUIR
+                          </button>
+                        )}
+                      </div>
                     </td>
                   )}
                 </tr>

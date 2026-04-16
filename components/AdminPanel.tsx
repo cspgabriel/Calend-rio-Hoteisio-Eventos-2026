@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { addDoc, collection, Timestamp, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { addDoc, collection, Timestamp, setDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { X, Plus, AlertTriangle } from 'lucide-react';
 import EventList from './EventList';
@@ -142,7 +142,7 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
       const start = new Date(Number(startParts[2]), Number(startParts[1]) - 1, Number(startParts[0]));
       const end = new Date(Number(endParts[2]), Number(endParts[1]) - 1, Number(endParts[0]));
 
-      await updateDoc(doc(db, 'eventos', editingEvent.id), {
+      const payload: Record<string, any> = {
         name: editForm.name,
         venue: editForm.venue,
         type: editForm.type,
@@ -151,7 +151,13 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
         neighborhood: editForm.neighborhood,
         region: editingEvent.region || 'A definir',
         year: editForm.year,
-      });
+        updatedAt: Timestamp.now(),
+      };
+      if (editingEvent.inclusionDate === 'N/A') {
+        payload.addedAt = Timestamp.now();
+      }
+
+      await setDoc(doc(db, 'eventos', editingEvent.id), payload, { merge: true });
 
       setEditSuccess('Evento atualizado com sucesso!');
       onReload?.();
@@ -172,7 +178,15 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
 
     setDeleteSubmitting(true);
     try {
-      await deleteDoc(doc(db, 'eventos', pendingDelete.id));
+      const isStaticEvent = pendingDelete.id.startsWith('evt-') || pendingDelete.id.startsWith('tf-');
+      if (isStaticEvent) {
+        await setDoc(doc(db, 'eventos', pendingDelete.id), {
+          deleted: true,
+          updatedAt: Timestamp.now(),
+        }, { merge: true });
+      } else {
+        await deleteDoc(doc(db, 'eventos', pendingDelete.id));
+      }
       setPendingDelete(null);
       onReload?.();
     } catch (err) {
