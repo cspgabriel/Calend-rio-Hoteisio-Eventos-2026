@@ -160,7 +160,9 @@ export default function App() {
   };
 
   const filterOptions = useMemo(() => {
-    const regions = Array.from(new Set(events.map(e => e.region))).sort();
+    const regions = Array.from(new Set(events.map(e => e.region)))
+      .filter(region => region !== 'A definir')
+      .sort();
     const neighborhoods = Array.from(new Set(events.map(e => e.neighborhood))).sort();
     const venues = Array.from(new Set(events.map(e => e.venue))).sort();
     const types = Array.from(new Set(events.map(e => e.type))).sort();
