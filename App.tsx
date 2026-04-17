@@ -39,6 +39,11 @@ const NAV_ITEMS = [
   { id: 'high-demand', label: 'Mais Público', icon: TrendingUp },
 ];
 
+const TYPE_MAPPING: Record<string, string> = {
+  feira: 'Feira & Exposição',
+  show: 'Show & Festival'
+};
+
 export default function App() {
   const [activeView, setActiveView] = useState<ViewType>('list');
   
@@ -91,12 +96,8 @@ export default function App() {
             ? addedAtRaw.toDate()
             : null;
 
-        const normalizedType = (() => {
-          const typeValue = (data.type || '').toString().trim().toLowerCase();
-          if (typeValue === 'feira') return 'Feira & Exposição';
-          if (typeValue === 'show') return 'Show & Festival';
-          return data.type;
-        })();
+        const rawType = (data.type ?? '').toString().trim();
+        const normalizedType = TYPE_MAPPING[rawType.toLowerCase()] ?? (rawType.length > 0 ? rawType : 'Outros');
 
         return {
           id: doc.id,
