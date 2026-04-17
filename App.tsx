@@ -91,11 +91,18 @@ export default function App() {
             ? addedAtRaw.toDate()
             : null;
 
+        const normalizedType = (() => {
+          const typeValue = (data.type || '').toString().trim().toLowerCase();
+          if (typeValue === 'feira') return 'Feira & Exposição';
+          if (typeValue === 'show') return 'Show & Festival';
+          return data.type;
+        })();
+
         return {
           id: doc.id,
           name: data.name,
           venue: data.venue,
-          type: data.type,
+          type: normalizedType,
           startDate: startDate.toLocaleDateString('pt-BR'),
           endDate: endDate.toLocaleDateString('pt-BR'),
           month: startDate.toLocaleDateString('pt-BR', { month: 'long' }),
@@ -160,7 +167,9 @@ export default function App() {
   };
 
   const filterOptions = useMemo(() => {
-    const regions = Array.from(new Set(events.map(e => e.region))).sort();
+    const regions = Array.from(new Set(events.map(e => e.region)))
+      .filter(region => region !== 'Barra & Jacarepaguá')
+      .sort();
     const neighborhoods = Array.from(new Set(events.map(e => e.neighborhood))).sort();
     const venues = Array.from(new Set(events.map(e => e.venue))).sort();
     const types = Array.from(new Set(events.map(e => e.type))).sort();
