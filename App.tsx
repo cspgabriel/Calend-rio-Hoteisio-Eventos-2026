@@ -124,6 +124,24 @@ export default function App() {
     return region;
   };
 
+  const normalizeEventType = (event: Pick<EventData, 'name' | 'type'>) => {
+    const normalizedType = normalizeString(event.type || '');
+    const normalizedName = normalizeString(event.name || '');
+
+    if (normalizedType === 'feira') return 'Feira & Exposição';
+    if (normalizedType === 'show' || normalizedType === 'festival') return 'Show & Festival';
+
+    if (
+      normalizedName === 'herdeira' ||
+      normalizedName === 'cbkc 2026' ||
+      normalizedName === 'congresso veterinario de leon no brasil'
+    ) {
+      return 'Congresso & Conferência';
+    }
+
+    return event.type;
+  };
+
   const excludeYear2025 = (event: EventData) => getEventYear(event) !== '2025';
   const excludeApogeuHouseMusic = (event: EventData) =>
     !normalizeString(event.name).includes('apogeu house music');
@@ -136,6 +154,7 @@ export default function App() {
         .filter(includeVisibleEvent)
         .map(event => ({
           ...event,
+          type: normalizeEventType(event),
           region: normalizeRegion(event.region),
         })));
       setLoadingEvents(false);
@@ -158,7 +177,7 @@ export default function App() {
           id: doc.id,
           name: data.name,
           venue: data.venue,
-          type: data.type,
+          type: normalizeEventType({ name: data.name, type: data.type }),
           startDate: startDate.toLocaleDateString('pt-BR'),
           endDate: endDate.toLocaleDateString('pt-BR'),
           month: startDate.toLocaleDateString('pt-BR', { month: 'long' }),
@@ -181,6 +200,7 @@ export default function App() {
         .filter(includeVisibleEvent)
         .map(event => ({
           ...event,
+          type: normalizeEventType(event),
           region: normalizeRegion(event.region),
         }));
       const existingIds = new Set(merged.map(e => e.id));
@@ -202,6 +222,7 @@ export default function App() {
         .filter(includeVisibleEvent)
         .map(event => ({
           ...event,
+          type: normalizeEventType(event),
           region: normalizeRegion(event.region),
         })));
     } finally {
