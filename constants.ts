@@ -196,7 +196,6 @@ const RAW_EVENTS_DATA = [
   { name: "SBC Summit Rio 2026", venue: "Riocentro", type: "Congresso", start: "03/03/2026", end: "05/03/2026", neighborhood: "Barra Olímpica", point: "POINT (-43.4028 -22.9731)", year: "2026", addedAt: "20/11/2024" },
   { name: "International AIDS Conference", venue: "Riocentro", type: "Congresso Médico", start: "26/07/2026", end: "31/07/2026", neighborhood: "Barra Olímpica", point: "POINT (-43.4028 -22.9731)", year: "2026", addedAt: "15/12/2024" },
   { name: "Estética in Rio", venue: "Riocentro", type: "Congresso/Feira", start: "16/05/2026", end: "18/05/2026", neighborhood: "Barra Olímpica", point: "POINT (-43.3966 -22.9666)", year: "2026", addedAt: "05/12/2024" },
-  { name: "APOGEU HOUSE MUSIC", venue: "Riocentro", type: "Show/Festa", start: "30/12/2025", end: "30/12/2025", neighborhood: "Barra Olímpica", point: "POINT (-43.3966 -22.9666)", year: "2025", addedAt: "10/10/2024" },
   { name: "Ensaios da Anitta", venue: "A definir", type: "Show/Festival", start: "20/01/2026", end: "25/01/2026", neighborhood: "A definir", point: "", year: "2026", addedAt: "15/11/2024" },
   { name: "Mega Gestante (Fev)", venue: "Riocentro", type: "Feira", start: "04/02/2026", end: "08/02/2026", neighborhood: "Barra Olímpica", point: "POINT (-43.3966 -22.9666)", year: "2026", addedAt: "15/11/2024" },
   { name: "Carnaval We Make", venue: "A definir", type: "Festa/Carnaval", start: "13/02/2026", end: "13/02/2026", neighborhood: "A definir", point: "", year: "2026", addedAt: "15/11/2024" },
