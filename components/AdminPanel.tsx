@@ -84,7 +84,7 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
       const start = new Date(Number(startParts[2]), Number(startParts[1]) - 1, Number(startParts[0]));
       const end = new Date(Number(endParts[2]), Number(endParts[1]) - 1, Number(endParts[0]));
 
-      await addDoc(collection(db, 'eventos'), {
+      const docRef = await addDoc(collection(db, 'eventos'), {
         name: form.name,
         venue: form.venue,
         type: form.type,
@@ -95,6 +95,12 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
         year: form.year,
         addedAt: Timestamp.now(),
       });
+
+      fetch('/api/syncSheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'CREATE', eventData: { id: docRef.id, ...form, region: 'A definir' } })
+      }).catch(err => console.error("Erro no Sync:", err));
 
       setSuccess('Evento criado com sucesso!');
       handleReset();
@@ -159,6 +165,12 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
 
       await setDoc(doc(db, 'eventos', editingEvent.id), payload, { merge: true });
 
+      fetch('/api/syncSheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'UPDATE', eventData: { id: editingEvent.id, ...editForm, region: editingEvent.region || 'A definir' } })
+      }).catch(err => console.error("Erro no Sync:", err));
+
       setEditSuccess('Evento atualizado com sucesso!');
       onReload?.();
       setTimeout(() => {
@@ -179,6 +191,12 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
     setDeleteSubmitting(true);
     try {
       await deleteDoc(doc(db, 'eventos', pendingDelete.id));
+
+      fetch('/api/syncSheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'DELETE', eventData: { id: pendingDelete.id } })
+      }).catch(err => console.error("Erro no Sync:", err));
       setPendingDelete(null);
       onReload?.();
     } catch (err) {
