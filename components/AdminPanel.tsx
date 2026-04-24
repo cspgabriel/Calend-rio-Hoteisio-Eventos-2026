@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { addDoc, collection, Timestamp, setDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { X, Plus, AlertTriangle } from 'lucide-react';
+import { X, Plus, AlertTriangle, RefreshCw } from 'lucide-react';
 import EventList from './EventList';
 import { EventData } from '../types';
 
@@ -44,6 +44,41 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
   // Delete state
   const [pendingDelete, setPendingDelete] = useState<EventData | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+
+  // Sync all state
+  const [syncAllSubmitting, setSyncAllSubmitting] = useState(false);
+  const [syncAllSuccess, setSyncAllSuccess] = useState<string | null>(null);
+  const [syncAllError, setSyncAllError] = useState<string | null>(null);
+
+  const handleSyncAll = async () => {
+    setSyncAllSubmitting(true);
+    setSyncAllSuccess(null);
+    setSyncAllError(null);
+    try {
+      const eventsData = events.map(e => ({
+        id: e.id,
+        name: e.name,
+        venue: e.venue,
+        neighborhood: e.neighborhood,
+        region: e.region,
+        type: e.type,
+        startDate: e.startDate,
+        endDate: e.endDate,
+      }));
+      const res = await fetch('/api/syncSheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'SYNC_ALL', eventsData }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
+      setSyncAllSuccess(data.message);
+    } catch (err: any) {
+      setSyncAllError(err.message);
+    } finally {
+      setSyncAllSubmitting(false);
+    }
+  };
 
   const handleUnlock = () => {
     if (password === ADMIN_PASSWORD) {
@@ -260,6 +295,14 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
               Criar novo evento
             </button>
             <button
+              onClick={handleSyncAll}
+              disabled={syncAllSubmitting || loading}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50"
+            >
+              <RefreshCw size={16} className={syncAllSubmitting ? 'animate-spin' : ''} />
+              {syncAllSubmitting ? 'Sincronizando...' : 'Sync Sheets'}
+            </button>
+            <button
               onClick={() => {
                 setIsLocked(true);
                 setPassword('');
@@ -292,6 +335,8 @@ export default function AdminPanel({ events, loading, firestoreAvailable, onLogo
           ) : (
             <div className="mt-4 text-sm text-slate-500">Os eventos exibidos abaixo são provenientes do mesmo backend que alimenta o portal.</div>
           )}
+          {syncAllSuccess && <p className="mt-3 text-sm text-emerald-600">{syncAllSuccess}</p>}
+          {syncAllError && <p className="mt-3 text-sm text-red-600">Erro ao sincronizar: {syncAllError}</p>}
         </div>
 
         {showForm && (

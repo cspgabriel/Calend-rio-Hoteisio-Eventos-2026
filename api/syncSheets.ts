@@ -14,9 +14,9 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { action, eventData } = req.body;
+  const { action, eventData, eventsData } = req.body;
 
-  if (!eventData || !eventData.id) {
+  if (action !== 'SYNC_ALL' && (!eventData || !eventData.id)) {
     return res.status(400).json({ error: 'Missing event ID' });
   }
 
@@ -40,10 +40,42 @@ export default async function handler(req: any, res: any) {
     );
 
     const sheets = google.sheets({ version: "v4", auth });
-    
+
+    if (action === 'SYNC_ALL') {
+      if (!Array.isArray(eventsData) || eventsData.length === 0) {
+        return res.status(400).json({ error: 'eventsData array is required for SYNC_ALL' });
+      }
+
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId: SHEET_ID,
+        range: "Página1!A:H",
+      });
+
+      const headers = ["ID", "Nome", "Local", "Bairro", "Região", "Tipo", "Data Início", "Data Fim"];
+      const rows = eventsData.map((e: any) => [
+        e.id || "",
+        e.name || "",
+        e.venue || "",
+        e.neighborhood || "",
+        e.region || "",
+        e.type || "",
+        e.startDate || "",
+        e.endDate || "",
+      ]);
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: "Página1!A1",
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: [headers, ...rows] },
+      });
+
+      return res.status(200).json({ success: true, message: `${eventsData.length} eventos sincronizados com sucesso!` });
+    }
+
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: "Página1!A:A", 
+      range: "Página1!A:A",
     });
 
     const rows = response.data.values;
